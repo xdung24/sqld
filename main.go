@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,13 +8,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 )
-
-func usage() {
-	fmt.Fprintln(os.Stderr, usageMessage)
-	fmt.Fprintln(os.Stderr, "Flags:")
-	flag.PrintDefaults()
-	os.Exit(2)
-}
 
 // main handles some flag defaults, connects to the database,
 // and starts the http server.

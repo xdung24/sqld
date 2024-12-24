@@ -5,9 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,11 +18,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/mmaelzer/sqld/drivers"
 )
-
-const usageMessage = "" +
-	`Usage of 'sqld':
-	sqld -u root -db database_name -h localhost:3306 -type mysql
-`
 
 var (
 	allowRaw = flag.Bool("raw", false, "allow raw sql queries")
@@ -53,6 +49,17 @@ type RawQuery struct {
 type SqldError struct {
 	Code int
 	Err  error
+}
+
+// Print the usage message and exit
+func usage() {
+	var usageMessage = `Usage of 'sqld':
+	sqld -u root -db database_name -h localhost:3306 -type mysql
+`
+	fmt.Fprintln(os.Stderr, usageMessage)
+	fmt.Fprintln(os.Stderr, "Flags:")
+	flag.PrintDefaults()
+	os.Exit(2)
 }
 
 // Error is implemented to ensure SqldError conforms to the error
@@ -320,6 +327,9 @@ func createSingle(table string, item map[string]interface{}) (map[string]interfa
 		Values(values...)
 
 	sql, args, err := query.ToSql()
+	if err != nil {
+		return nil, err
+	}
 
 	res, err := db.Exec(sql, args...)
 	if err != nil {
@@ -335,7 +345,7 @@ func createSingle(table string, item map[string]interface{}) (map[string]interfa
 
 // create handles the POST method.
 func create(r *http.Request) (interface{}, *SqldError) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, BadRequest(err)
 	}
@@ -362,7 +372,7 @@ func create(r *http.Request) (interface{}, *SqldError) {
 
 // update handles the PUT method.
 func update(r *http.Request) (interface{}, *SqldError) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, BadRequest(err)
 	}
@@ -414,7 +424,7 @@ func execQuery(sql string, args []interface{}) (interface{}, *SqldError) {
 }
 
 func raw(r *http.Request) (interface{}, *SqldError) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, BadRequest(err)
 	}
