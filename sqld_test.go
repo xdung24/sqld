@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -501,7 +501,7 @@ func TestRaw(t *testing.T) {
 
 func TestHandleQuery(t *testing.T) {
 	assert := assert.New(t)
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(io.Discard)
 	handler := http.HandlerFunc(handleQuery)
 
 	createDB()

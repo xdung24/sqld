@@ -8,7 +8,6 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.24
-	github.com/mmaelzer/sqld v0.0.0-20160314040419-038e48790655
 	github.com/stretchr/testify v1.10.0
 )
 

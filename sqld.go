@@ -14,9 +14,12 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/mmaelzer/sqld/drivers"
+	// ??? TODO: test if we need to import these drivers or not
+	// Import the sql drivers
+	// _ "github.com/go-sql-driver/mysql"
+	// _ "github.com/lib/pq"
+	// _ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -137,15 +140,15 @@ func buildDSN() string {
 	}
 }
 
-func initDB(connect drivers.SQLConnector) (*sqlx.DB, squirrel.StatementBuilderType, error) {
+func initDB(connect SQLConnector) (*sqlx.DB, squirrel.StatementBuilderType, error) {
 	sq := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)
 	switch *dbtype {
 	case "mysql":
-		return drivers.InitMySQL(connect, *dbtype, buildDSN())
+		return InitMySQL(connect, *dbtype, buildDSN())
 	case "postgres":
-		return drivers.InitPostgres(connect, *dbtype, buildDSN())
+		return InitPostgres(connect, *dbtype, buildDSN())
 	case "sqlite3":
-		return drivers.InitSQLite(connect, *dbtype, buildDSN())
+		return InitSQLite(connect, *dbtype, buildDSN())
 	}
 	return nil, sq, errors.New("Unsupported database type " + *dbtype)
 }
@@ -480,7 +483,7 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Path == "/" {
-		if *allowRaw == true && r.Method == "POST" {
+		if allowRaw != nil && *allowRaw && r.Method == "POST" {
 			data, err = raw(r)
 		} else {
 			err = BadRequest(nil)
