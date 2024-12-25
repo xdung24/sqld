@@ -180,8 +180,6 @@ func selfHealthCheck(duration time.Duration, config Config) {
 		select {
 		case <-ticker.C:
 			log.Println("Self health checking...")
-			// Wait for 5 seconds before starting the health check
-			time.Sleep(5 * time.Second)
 			if _, err := http.Get(config.HealthCheckUrl); err != nil {
 				// Backoff for 5 seconds before retrying
 				time.Sleep(5 * time.Second)
