@@ -400,6 +400,7 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 		}
 		lastID, _ := res.LastInsertId()
 		rAffect, _ := res.RowsAffected()
+		totalWrites++
 		return map[string]interface{}{
 			"last_insert_id": lastID,
 			"rows_affected":  rAffect,
@@ -449,10 +450,13 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 			data, err = read(r)
 		case "POST":
 			data, err = create(r)
+			totalWrites++
 		case "PUT":
 			data, err = update(r)
+			totalWrites++
 		case "DELETE":
 			data, err = del(r)
+			totalWrites++
 		default:
 			err = &SqldError{http.StatusMethodNotAllowed, errors.New("MethodNotAllowed")}
 		}
@@ -478,6 +482,10 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 	logRequest(r, http.StatusOK, start)
+}
+
+func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }
 
 // backup copies the contents of the source database to the destination database using the SQLite backup API.

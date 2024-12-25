@@ -17,6 +17,7 @@ import (
 var config Config
 var db *sqlx.DB
 var sq squirrel.StatementBuilderType
+var totalWrites int
 
 // main handles some flag defaults,
 // connects to the database,
@@ -56,7 +57,9 @@ func main() {
 		log.Println("Restore completed.")
 	}
 
+	// Create http server
 	http.HandleFunc(config.Url, HandleQuery)
+	http.HandleFunc("/health", HandleHealthCheck)
 	server := &http.Server{Addr: fmt.Sprintf(":%d", config.Port)}
 
 	// Signal handling
@@ -64,6 +67,7 @@ func main() {
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+	// Handle signals
 	go func() {
 		sig := <-sigs
 		log.Println()
@@ -78,27 +82,30 @@ func main() {
 		}
 
 		// Save db to file if the database is sqlite3 memcache
-		if config.IsSqlite3Memcache() {
-			log.Println("Backing up database...")
-			backupdb, _, err := InitSQLite(sqlx.Connect, "sqlite3", config.SqliteBackup)
-			if err != nil {
-				log.Fatalf("Unable to connect to backup database: %s\n", err)
-			}
-			err = backup(backupdb, db)
-			if err != nil {
-				log.Fatalf("Unable to backup database: %s\n", err)
-			}
-			err = backupdb.Close()
-			if err != nil {
-				log.Fatalf("Unable to close backup database: %s\n", err)
-			}
-			backupdb = nil
-			log.Println("Backup completed.")
-		}
+		backupSqlite(config)
 
 		done <- true
 	}()
 
+	// Run the timer to check if the database connection is still alive
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			err := db.Ping()
+			if err != nil {
+				log.Fatalf("Database connection lost: %s\n", err)
+			}
+		}
+	}()
+
+	// Run the timer to save db to file if the database is sqlite3 memcache every 5 minutes
+	go autoBackup(5*time.Minute, config)
+
+	// Run timer to self health check
+	go selfHealthCheck(1*time.Minute, config)
+
+	// Start the server
 	log.Printf("sqld listening on port %d", config.Port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("ListenAndServe(): %s", err)
@@ -122,4 +129,71 @@ func fileExists(filePath string) bool {
 		return false
 	}
 	return true
+}
+
+// Save db to file if the database is sqlite3 memcache
+func backupSqlite(config Config) {
+	if config.IsSqlite3Memcache() {
+		log.Println("Backing up database...")
+		backupdb, _, err := InitSQLite(sqlx.Connect, "sqlite3", config.SqliteBackup)
+		if err != nil {
+			log.Fatalf("Unable to connect to backup database: %s\n", err)
+		}
+		err = backup(backupdb, db)
+		if err != nil {
+			log.Fatalf("Unable to backup database: %s\n", err)
+		}
+		err = backupdb.Close()
+		if err != nil {
+			log.Fatalf("Unable to close backup database: %s\n", err)
+		}
+		backupdb = nil
+		log.Println("Backup completed.")
+	}
+}
+
+// AutoBackup periodically takes a snapshot and saves it to disk
+func autoBackup(interval time.Duration, config Config) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if totalWrites > 0 {
+				totalWrites = 0
+				backupSqlite(config)
+			}
+		case <-context.Background().Done():
+			return
+		}
+	}
+}
+
+// selfHealthCheck periodically checks if the server is still alive
+func selfHealthCheck(duration time.Duration, config Config) {
+	ticker := time.NewTicker(duration)
+	defer ticker.Stop()
+
+	// Check if the server is still alive
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("Self health checking...")
+			// Wait for 5 seconds before starting the health check
+			time.Sleep(5 * time.Second)
+			if _, err := http.Get(config.HealthCheckUrl); err != nil {
+				// Backoff for 5 seconds before retrying
+				time.Sleep(5 * time.Second)
+				if _, err := http.Get(config.HealthCheckUrl); err != nil {
+					// Backup the database before exiting
+					log.Println("Self health check failed, backing up database...")
+					backupSqlite(config)
+					os.Exit(1)
+				}
+			}
+		case <-context.Background().Done():
+			return
+		}
+	}
 }

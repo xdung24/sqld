@@ -13,16 +13,17 @@ const (
 )
 
 type Config struct {
-	AllowRaw     bool   // allow raw sql queries
-	Dsn          string // database source name
-	User         string // database username
-	Pass         string // database password
-	Host         string // database host
-	Dbtype       string // database type
-	Dbname       string // database name
-	Port         int    // server http port
-	Url          string // url prefix
-	SqliteBackup string // sqlite backup file
+	AllowRaw       bool   // allow raw sql queries
+	Dsn            string // database source name
+	User           string // database username
+	Pass           string // database password
+	Host           string // database host
+	Dbtype         string // database type
+	Dbname         string // database name
+	Port           int    // server http port
+	Url            string // url prefix
+	SqliteBackup   string // sqlite backup file
+	HealthCheckUrl string // health check url
 }
 
 func parseConfig() Config {
@@ -36,19 +37,22 @@ func parseConfig() Config {
 	var port = flag.Int("port", 8080, "http port")
 	var url = flag.String("url", "/", "url prefix")
 	var sqliteBackup = flag.String("sqliteBackup", "", "sqlite backup file")
+	var healthCheckUrl = flag.String("healthCheckUrl", "http://localhost:8080/health", "health check url")
+
 	flag.Parse()
 
 	return Config{
-		AllowRaw:     *allowRaw,
-		Dsn:          *dsn,
-		User:         *user,
-		Pass:         *pass,
-		Host:         *host,
-		Dbtype:       *dbtype,
-		Dbname:       *dbname,
-		Port:         *port,
-		Url:          *url,
-		SqliteBackup: *sqliteBackup,
+		AllowRaw:       *allowRaw,
+		Dsn:            *dsn,
+		User:           *user,
+		Pass:           *pass,
+		Host:           *host,
+		Dbtype:         *dbtype,
+		Dbname:         *dbname,
+		Port:           *port,
+		Url:            *url,
+		SqliteBackup:   *sqliteBackup,
+		HealthCheckUrl: *healthCheckUrl,
 	}
 }
 
