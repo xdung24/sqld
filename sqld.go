@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,17 +14,12 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
-)
-
-var (
-	db *sqlx.DB
-	sq squirrel.StatementBuilderType
+	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
 // RawQuery wraps the request body of a raw sqld request
 type RawQuery struct {
-	ReadQuery  string `json:"read"`
-	WriteQuery string `json:"write"`
+	SqlQuery string `json:"sql"`
 }
 
 // SqldError provides additional information on errors encountered
@@ -64,20 +60,21 @@ func InternalError(err error) *SqldError {
 	return NewError(err, http.StatusInternalServerError)
 }
 
-func InitDB(config Config, connect SQLConnector) (*sqlx.DB, squirrel.StatementBuilderType, error) {
+func InitDB(config Config) (*sqlx.DB, squirrel.StatementBuilderType, error) {
+
 	sq := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)
 	switch config.Dbtype {
 	case "mysql":
-		return InitMySQL(connect, config.Dbtype, config.Dsn)
+		return InitMySQL(sqlx.Connect, config.Dbtype, config.Dsn)
 	case "postgres":
-		return InitPostgres(connect, config.Dbtype, config.Dsn)
+		return InitPostgres(sqlx.Connect, config.Dbtype, config.Dsn)
 	case "sqlite3":
-		return InitSQLite(connect, config.Dbtype, config.Dsn)
+		return InitSQLite(sqlx.Connect, config.Dbtype, config.Dsn)
 	}
 	return nil, sq, errors.New("Unsupported database type " + config.Dbtype)
 }
 
-func closeDB() error {
+func CloseDB() error {
 	if db != nil {
 		return db.Close()
 	}
@@ -231,7 +228,7 @@ func read(r *http.Request) (interface{}, *SqldError) {
 
 	tableData, err := readQuery(sql, args)
 	if err != nil {
-		return nil, InternalError(err)
+		return nil, BadRequest(err)
 	}
 	return tableData, nil
 }
@@ -289,7 +286,7 @@ func create(r *http.Request) (interface{}, *SqldError) {
 	if ok {
 		saved, err := createSingle(table, item)
 		if err != nil {
-			return nil, InternalError(err)
+			return nil, BadRequest(err)
 		}
 		return saved, nil
 	}
@@ -344,12 +341,36 @@ func execQuery(sql string, args []interface{}) (interface{}, *SqldError) {
 	}
 
 	if res != nil && rows == 0 {
-		return nil, NotFound(err)
+		return nil, BadRequest(err)
 	}
 
 	return nil, nil
 }
 
+// detectQueryType determines if the SQL query is a read or write operation
+func detectQueryType(query string) string {
+	var firstWord = strings.Split(query, " ")[0]
+	var action = strings.TrimSpace(strings.ToUpper(firstWord))
+	if action == "SELECT" ||
+		action == "SHOW" ||
+		action == "DESCRIBE" ||
+		action == "EXPLAIN" ||
+		action == "DESC" ||
+		action == "PRAGMA" {
+		return "read"
+	}
+	if action == "INSERT" ||
+		action == "UPDATE" ||
+		action == "DELETE" ||
+		action == "CREATE" ||
+		action == "DROP" ||
+		action == "ALTER" {
+		return "write"
+	}
+	return "unknown"
+}
+
+// Execute a raw query
 func raw(r *http.Request) (interface{}, *SqldError) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -364,15 +385,16 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 	}
 
 	var noArgs []interface{}
-	if query.ReadQuery != "" {
-		tableData, err := readQuery(query.ReadQuery, noArgs)
+	var queryType = detectQueryType(query.SqlQuery)
+	if queryType == "read" {
+		tableData, err := readQuery(query.SqlQuery, noArgs)
 		if err != nil {
 			return nil, BadRequest(err)
 		}
 		return tableData, nil
 	}
-	if query.WriteQuery != "" {
-		res, err := db.Exec(query.WriteQuery, noArgs...)
+	if queryType == "write" {
+		res, err := db.Exec(query.SqlQuery, noArgs...)
 		if err != nil {
 			return nil, BadRequest(err)
 		}
@@ -409,7 +431,7 @@ func logRequest(r *http.Request, status int, start time.Time) {
 // given the request method. If the request method matches
 // no available handlers, it responds with a method not found
 // status.
-func handleQuery(w http.ResponseWriter, r *http.Request) {
+func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	var err *SqldError
 	var data interface{}
 	status := http.StatusOK
@@ -427,27 +449,80 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 			data, err = read(r)
 		case "POST":
 			data, err = create(r)
-			status = http.StatusCreated
 		case "PUT":
 			data, err = update(r)
 		case "DELETE":
 			data, err = del(r)
 		default:
-			err = &SqldError{http.StatusMethodNotAllowed, errors.New("")}
+			err = &SqldError{http.StatusMethodNotAllowed, errors.New("MethodNotAllowed")}
 		}
 	}
 
-	if err == nil && data == nil {
+	// If an error occurred, write the error to the response
+	if err != nil {
+		http.Error(w, err.Error(), err.Code)
+		logRequest(r, err.Code, start)
+		return
+	}
+
+	// If no data was returned, write a 204 NO CONTENT response
+	if data == nil {
 		status := http.StatusNoContent
 		w.WriteHeader(status)
 		logRequest(r, status, start)
-	} else if err != nil {
-		http.Error(w, err.Error(), err.Code)
-		logRequest(r, err.Code, start)
-	} else {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(data)
-		logRequest(r, http.StatusOK, start)
+		return
 	}
+
+	// Write the data to the response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+	logRequest(r, http.StatusOK, start)
+}
+
+// backup copies the contents of the source database to the destination database using the SQLite backup API.
+func backup(destDb, srcDb *sqlx.DB) error {
+	destConn, err := destDb.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+
+	srcConn, err := srcDb.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+
+	return destConn.Raw(func(destConn interface{}) error {
+		return srcConn.Raw(func(srcConn interface{}) error {
+			destSQLiteConn, ok := destConn.(*sqlite3.SQLiteConn)
+			if !ok {
+				return fmt.Errorf("can't convert destination connection to SQLiteConn")
+			}
+
+			srcSQLiteConn, ok := srcConn.(*sqlite3.SQLiteConn)
+			if !ok {
+				return fmt.Errorf("can't convert source connection to SQLiteConn")
+			}
+
+			b, err := destSQLiteConn.Backup("main", srcSQLiteConn, "main")
+			if err != nil {
+				return fmt.Errorf("error initializing SQLite backup: %w", err)
+			}
+
+			done, err := b.Step(-1)
+			if !done {
+				return fmt.Errorf("step of -1, but not done")
+			}
+			if err != nil {
+				return fmt.Errorf("error in stepping backup: %w", err)
+			}
+
+			err = b.Finish()
+			if err != nil {
+				return fmt.Errorf("error finishing backup: %w", err)
+			}
+
+			return err
+		})
+	})
 }

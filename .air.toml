@@ -3,9 +3,9 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["-raw", "-type", "sqlite3"]
-  bin = "tmp\\main.exe"
-  cmd = "go build -o ./tmp/main.exe ."
+  args_bin = ["-raw", "-type", "sqlite3", "-dsn", "file::memory:?cache=shared", "-sqliteBackup", "./tmp/db.sqlite"]
+  bin = "tmp\\sqld.exe"
+  cmd = "go build -o ./tmp/sqld.exe ."
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
@@ -16,7 +16,7 @@ tmp_dir = "tmp"
   include_dir = []
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []
-  kill_delay = "0s"
+  kill_delay = "10s"  # Increased kill delay
   log = "build-errors.log"
   poll = false
   poll_interval = 0

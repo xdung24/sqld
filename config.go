@@ -13,15 +13,16 @@ const (
 )
 
 type Config struct {
-	AllowRaw bool   // allow raw sql queries
-	Dsn      string // database source name
-	User     string // database username
-	Pass     string // database password
-	Host     string // database host
-	Dbtype   string // database type
-	Dbname   string // database name
-	Port     int    // server http port
-	Url      string // url prefix
+	AllowRaw     bool   // allow raw sql queries
+	Dsn          string // database source name
+	User         string // database username
+	Pass         string // database password
+	Host         string // database host
+	Dbtype       string // database type
+	Dbname       string // database name
+	Port         int    // server http port
+	Url          string // url prefix
+	SqliteBackup string // sqlite backup file
 }
 
 func parseConfig() Config {
@@ -34,18 +35,20 @@ func parseConfig() Config {
 	var dbname = flag.String("db", "", "database name")
 	var port = flag.Int("port", 8080, "http port")
 	var url = flag.String("url", "/", "url prefix")
+	var sqliteBackup = flag.String("sqliteBackup", "", "sqlite backup file")
 	flag.Parse()
 
 	return Config{
-		AllowRaw: *allowRaw,
-		Dsn:      *dsn,
-		User:     *user,
-		Pass:     *pass,
-		Host:     *host,
-		Dbtype:   *dbtype,
-		Dbname:   *dbname,
-		Port:     *port,
-		Url:      *url,
+		AllowRaw:     *allowRaw,
+		Dsn:          *dsn,
+		User:         *user,
+		Pass:         *pass,
+		Host:         *host,
+		Dbtype:       *dbtype,
+		Dbname:       *dbname,
+		Port:         *port,
+		Url:          *url,
+		SqliteBackup: *sqliteBackup,
 	}
 }
 
@@ -104,8 +107,9 @@ Options:
   -db, --dbname    Database name
   -port, --port    HTTP port (default: 8080)
   -url, --url      URL prefix (default: /)
-  -dsn, --dsn      Database source name
+  -dsn, --dsn      Database source name (default: file::memory:?cache=shared)
   -raw, --allowRaw Allow raw SQL queries (default: false)
+  -sqliteBackup    SQLite backup file when using sqlite3 memcache (default: db.sqlite)
 
 Example:
   sqld -u root -p password -db mydatabase -h localhost:3306 -type mysql -port 8080 -url /api
@@ -113,7 +117,7 @@ Example:
 	fmt.Fprintln(os.Stderr, usageMessage)
 	fmt.Fprintln(os.Stderr, "Flags:")
 	flag.PrintDefaults()
-	os.Exit(2)
+	os.Exit(1)
 }
 
 // HandleFlags parses the command line flags and returns the Config
@@ -123,4 +127,9 @@ func HandleFlags() Config {
 	config.fixUrl()
 	config.buildDSN()
 	return config
+}
+
+// IsSqlite3Memcache returns true if the database is sqlite3 memcache and sqlite backup file is set
+func (c *Config) IsSqlite3Memcache() bool {
+	return c.Dbtype == "sqlite3" && strings.HasPrefix(c.Dsn, "file::memory:") && c.SqliteBackup != ""
 }
