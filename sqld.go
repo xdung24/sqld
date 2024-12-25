@@ -3,41 +3,19 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
-	// ??? TODO: test if we need to import these drivers or not
-	// Import the sql drivers
-	// _ "github.com/go-sql-driver/mysql"
-	// _ "github.com/lib/pq"
-	// _ "github.com/mattn/go-sqlite3"
 )
 
 var (
-	allowRaw = flag.Bool("raw", false, "allow raw sql queries")
-	dsn      = flag.String("dsn", "", "database source name")
-	user     = flag.String("u", "root", "database username")
-	pass     = flag.String("p", "", "database password")
-	host     = flag.String("h", "", "database host")
-	dbtype   = flag.String("type", "mysql", "database type")
-	dbname   = flag.String("db", "", "database name")
-	port     = flag.Int("port", 8080, "http port")
-	url      = flag.String("url", "/", "url prefix")
-)
-
-var (
-	mysqlDSNTemplate    = "%s:%s@(%s)/%s?parseTime=true"
-	postgresDSNTemplate = "postgres://%s:%s@%s/%s?sslmode=disable"
-
 	db *sqlx.DB
 	sq squirrel.StatementBuilderType
 )
@@ -52,17 +30,6 @@ type RawQuery struct {
 type SqldError struct {
 	Code int
 	Err  error
-}
-
-// Print the usage message and exit
-func usage() {
-	var usageMessage = `Usage of 'sqld':
-	sqld -u root -db database_name -h localhost:3306 -type mysql
-`
-	fmt.Fprintln(os.Stderr, usageMessage)
-	fmt.Fprintln(os.Stderr, "Flags:")
-	flag.PrintDefaults()
-	os.Exit(2)
 }
 
 // Error is implemented to ensure SqldError conforms to the error
@@ -97,60 +64,17 @@ func InternalError(err error) *SqldError {
 	return NewError(err, http.StatusInternalServerError)
 }
 
-func handleFlags() {
-	flag.Usage = usage
-	flag.Parse()
-	if !strings.HasSuffix(*url, "/") {
-		*url += "/"
-	}
-
-	if !strings.HasPrefix(*url, "/") {
-		*url = "/" + *url
-	}
-}
-
-func buildDSN() string {
-	if dsn != nil && *dsn != "" {
-		return *dsn
-	}
-
-	if host == nil || *host == "" {
-		if *dbtype == "postgres" {
-			*host = "localhost:5432"
-		} else {
-			*host = "localhost:3306"
-		}
-	}
-
-	if user == nil || *user == "" {
-		*user = "root"
-	}
-
-	if pass == nil || *pass == "" {
-		*pass = ""
-	}
-
-	switch *dbtype {
-	case "mysql":
-		return fmt.Sprintf(mysqlDSNTemplate, *user, *pass, *host, *dbname)
-	case "postgres":
-		return fmt.Sprintf(postgresDSNTemplate, *user, *pass, *host, *dbname)
-	default:
-		return ""
-	}
-}
-
-func initDB(connect SQLConnector) (*sqlx.DB, squirrel.StatementBuilderType, error) {
+func InitDB(config Config, connect SQLConnector) (*sqlx.DB, squirrel.StatementBuilderType, error) {
 	sq := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)
-	switch *dbtype {
+	switch config.Dbtype {
 	case "mysql":
-		return InitMySQL(connect, *dbtype, buildDSN())
+		return InitMySQL(connect, config.Dbtype, config.Dsn)
 	case "postgres":
-		return InitPostgres(connect, *dbtype, buildDSN())
+		return InitPostgres(connect, config.Dbtype, config.Dsn)
 	case "sqlite3":
-		return InitSQLite(connect, *dbtype, buildDSN())
+		return InitSQLite(connect, config.Dbtype, config.Dsn)
 	}
-	return nil, sq, errors.New("Unsupported database type " + *dbtype)
+	return nil, sq, errors.New("Unsupported database type " + config.Dbtype)
 }
 
 func closeDB() error {
@@ -161,7 +85,7 @@ func closeDB() error {
 }
 
 func parseRequest(r *http.Request) (string, map[string][]string, string) {
-	paths := strings.Split(strings.TrimPrefix(r.URL.Path, *url), "/")
+	paths := strings.Split(strings.TrimPrefix(r.URL.Path, config.Url), "/")
 	table := paths[0]
 	id := ""
 	if len(paths) > 1 {
@@ -462,6 +386,25 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 	return nil, BadRequest(nil)
 }
 
+func logRequest(r *http.Request, status int, start time.Time) {
+	elapsed := time.Since(start)
+	var elapsedStr string
+	if elapsed < time.Millisecond {
+		elapsedStr = fmt.Sprintf("%d µs", elapsed.Microseconds())
+	} else if elapsed < time.Second {
+		elapsedStr = fmt.Sprintf("%d ms", elapsed.Milliseconds())
+	} else {
+		elapsedStr = fmt.Sprintf("%.2f s", elapsed.Seconds())
+	}
+	log.Printf(
+		"%d %s %s %s",
+		status,
+		r.Method,
+		r.URL.String(),
+		elapsedStr,
+	)
+}
+
 // handleQuery routes the given request to the proper handler
 // given the request method. If the request method matches
 // no available handlers, it responds with a method not found
@@ -470,20 +413,10 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	var err *SqldError
 	var data interface{}
 	status := http.StatusOK
-
 	start := time.Now()
-	logRequest := func(status int) {
-		log.Printf(
-			"%d %s %s %s",
-			status,
-			r.Method,
-			r.URL.String(),
-			time.Since(start),
-		)
-	}
 
 	if r.URL.Path == "/" {
-		if allowRaw != nil && *allowRaw && r.Method == "POST" {
+		if config.AllowRaw && r.Method == "POST" {
 			data, err = raw(r)
 		} else {
 			err = BadRequest(nil)
@@ -507,14 +440,14 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 	if err == nil && data == nil {
 		status := http.StatusNoContent
 		w.WriteHeader(status)
-		logRequest(status)
+		logRequest(r, status, start)
 	} else if err != nil {
 		http.Error(w, err.Error(), err.Code)
-		logRequest(err.Code)
+		logRequest(r, err.Code, start)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		json.NewEncoder(w).Encode(data)
-		logRequest(http.StatusOK)
+		logRequest(r, http.StatusOK, start)
 	}
 }
