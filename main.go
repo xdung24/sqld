@@ -49,7 +49,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("Unable to restore database: %s\n", err)
 		}
-		backupdb.Close()
+		err = backupdb.Close()
+		if err != nil {
+			log.Fatalf("Unable to close backup database: %s\n", err)
+		}
 		log.Println("Restore completed.")
 	}
 
@@ -85,7 +88,11 @@ func main() {
 			if err != nil {
 				log.Fatalf("Unable to backup database: %s\n", err)
 			}
-			backupdb.Close()
+			err = backupdb.Close()
+			if err != nil {
+				log.Fatalf("Unable to close backup database: %s\n", err)
+			}
+			backupdb = nil
 			log.Println("Backup completed.")
 		}
 

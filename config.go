@@ -88,7 +88,7 @@ func (c *Config) buildDSN() {
 	case "postgres":
 		c.Dsn = fmt.Sprintf(postgresDSNTemplate, c.User, c.Pass, c.Host, c.Dbname)
 	case "sqlite3":
-		c.Dsn = "file::memory:?cache=shared"
+		c.Dsn = "file::memory:"
 	default:
 		panic("Unsupported database type " + c.Dbtype)
 	}
@@ -107,7 +107,7 @@ Options:
   -db, --dbname    Database name
   -port, --port    HTTP port (default: 8080)
   -url, --url      URL prefix (default: /)
-  -dsn, --dsn      Database source name (default: file::memory:?cache=shared)
+  -dsn, --dsn      Database source name (default: file::memory:)
   -raw, --allowRaw Allow raw SQL queries (default: false)
   -sqliteBackup    SQLite backup file when using sqlite3 memcache (default: db.sqlite)
 

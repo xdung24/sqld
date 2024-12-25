@@ -486,11 +486,13 @@ func backup(destDb, srcDb *sqlx.DB) error {
 	if err != nil {
 		return err
 	}
+	defer destConn.Close()
 
 	srcConn, err := srcDb.Conn(context.Background())
 	if err != nil {
 		return err
 	}
+	defer srcConn.Close()
 
 	return destConn.Raw(func(destConn interface{}) error {
 		return srcConn.Raw(func(srcConn interface{}) error {
