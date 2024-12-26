@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,21 @@ type SqldError struct {
 	Code int
 	Err  error
 }
+
+// Response is a generic response struct
+type Response struct {
+	Data  *interface{} `json:"data,omitempty"`
+	Error *string      `json:"error,omitempty"`
+}
+
+// ExecResult is a generic response struct for exec queries
+type ExecResult struct {
+	LastInsertID int64 `json:"last_insert_id"`
+	RowsAffected int64 `json:"rows_affected"`
+}
+
+// EmptyArray is an empty array of maps
+var EmptyArray = []map[string]string{}
 
 // Error is implemented to ensure SqldError conforms to the error
 // interface
@@ -269,19 +285,23 @@ func createSingle(table string, item map[string]interface{}) (map[string]interfa
 
 // create handles the POST method.
 func create(r *http.Request) (interface{}, *SqldError) {
+	// Read the request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, BadRequest(err)
 	}
 	defer r.Body.Close()
 
+	// Parse the request body
 	var data interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
 		return nil, BadRequest(err)
 	}
 
+	// Get the table name from the request path
 	table, _, _ := parseRequest(r)
 
+	// Map item data into interface and create a single item
 	item, ok := data.(map[string]interface{})
 	if ok {
 		saved, err := createSingle(table, item)
@@ -291,7 +311,7 @@ func create(r *http.Request) (interface{}, *SqldError) {
 		return saved, nil
 	}
 
-	return nil, BadRequest(nil)
+	return nil, BadRequest(errors.New("invalid request"))
 }
 
 // update handles the PUT method.
@@ -335,16 +355,17 @@ func execQuery(sql string, args []interface{}) (interface{}, *SqldError) {
 		return nil, BadRequest(err)
 	}
 
-	rows, err := res.RowsAffected()
+	lastInsertId, err := res.LastInsertId()
 	if err != nil {
 		return nil, BadRequest(err)
 	}
 
-	if res != nil && rows == 0 {
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
 		return nil, BadRequest(err)
 	}
 
-	return nil, nil
+	return ExecResult{LastInsertID: lastInsertId, RowsAffected: rowsAffected}, nil
 }
 
 // detectQueryType determines if the SQL query is a read or write operation
@@ -371,6 +392,8 @@ func detectQueryType(query string) string {
 }
 
 // Execute a raw query
+// Suport content type application/json and text/plain, application/json is default
+// Type of action will be detected by the first word of the query
 func raw(r *http.Request) (interface{}, *SqldError) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -379,11 +402,22 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 	defer r.Body.Close()
 
 	var query RawQuery
-	err = json.Unmarshal(body, &query)
-	if err != nil {
-		return nil, BadRequest(err)
+
+	// Read the sql query from the request body
+	var contentType = r.Header.Get("Content-Type")
+	if contentType == "text/plain" {
+		query.SqlQuery = string(body)
+		if query.SqlQuery == "" {
+			return nil, BadRequest(errors.New("invalid raw query request"))
+		}
+	} else {
+		err = json.Unmarshal(body, &query)
+		if err != nil {
+			return nil, BadRequest(err)
+		}
 	}
 
+	// Execute the query
 	var noArgs []interface{}
 	var queryType = detectQueryType(query.SqlQuery)
 	if queryType == "read" {
@@ -406,7 +440,9 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 			"rows_affected":  rAffect,
 		}, nil
 	}
-	return nil, BadRequest(nil)
+
+	// If the query type is unknown, return a bad request
+	return nil, BadRequest(errors.New("unknown query type"))
 }
 
 func logRequest(r *http.Request, status int, start time.Time) {
@@ -428,6 +464,149 @@ func logRequest(r *http.Request, status int, start time.Time) {
 	)
 }
 
+func quoteMinimal(field string) string {
+	if strings.ContainsAny(field, ",\"\n") {
+		return strconv.Quote(field)
+	}
+	return field
+}
+
+// writeResponseCsv writes the response to the client in csv format
+func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) int {
+	// If an error occurred, write the error to the response
+	if err != nil {
+		http.Error(w, err.Error(), err.Code)
+		return err.Code
+	}
+
+	// If no data was returned, write a 200 OK response
+	if data == nil {
+		w.WriteHeader(http.StatusOK)
+		return http.StatusOK
+	}
+
+	// write csv response
+	w.Header().Set("Content-Type", "text/csv")
+	rv := reflect.ValueOf(data)
+
+	if rv.Kind() == reflect.Struct {
+		w.WriteHeader(http.StatusOK)
+		if result, ok := data.(ExecResult); ok {
+			w.Write([]byte("last_insert_id,rows_affected\n"))
+			w.Write([]byte(fmt.Sprintf("%v,%v\n", result.LastInsertID, result.RowsAffected)))
+		}
+		return http.StatusOK
+	}
+
+	if rv.IsNil() {
+		w.WriteHeader(http.StatusOK)
+		return http.StatusOK
+	}
+
+	// if data is basic type, return 200 OK
+	if rv.Kind() == reflect.String || rv.Kind() == reflect.Int || rv.Kind() == reflect.Float64 {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(fmt.Sprintf("%v", data)))
+		return http.StatusOK
+	}
+
+	// if data is a map, return 200 OK
+	if rv.Kind() == reflect.Map {
+		// get the headers
+		w.WriteHeader(http.StatusOK)
+		var headers []string
+		for key := range data.(map[string]interface{}) {
+			headers = append(headers, key)
+		}
+		w.Write([]byte(strings.Join(headers, ",") + "\n"))
+		// get the values
+		var row []string
+		for _, header := range headers {
+			val := data.(map[string]interface{})[header]
+			valStr := fmt.Sprintf("%v", val)
+			if val == nil {
+				valStr = "null"
+			}
+			row = append(row, quoteMinimal(valStr))
+		}
+		w.Write([]byte(strings.Join(row, ",") + "\n"))
+		return http.StatusOK
+	}
+
+	// if data is a slice or array, return 200 OK
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		// if data is empty, return 200 OK
+		if rv.Len() == 0 {
+			w.WriteHeader(http.StatusOK)
+			return http.StatusOK
+		}
+
+		// get the first element of the slice to get the headers
+		w.WriteHeader(http.StatusOK)
+		var headers []string
+		for key := range rv.Index(0).Interface().(map[string]interface{}) {
+			headers = append(headers, key)
+		}
+		w.Write([]byte(strings.Join(headers, ",") + "\n"))
+
+		// write the data
+		for _, item := range data.([]map[string]interface{}) {
+			var row []string
+			for _, header := range headers {
+				val := item[header]
+				valStr := fmt.Sprintf("%v", val)
+				if val == nil {
+					valStr = "null"
+				}
+				row = append(row, quoteMinimal(valStr))
+			}
+			w.Write([]byte(strings.Join(row, ",") + "\n"))
+		}
+
+		return http.StatusOK
+	}
+
+	return http.StatusInternalServerError
+}
+
+// writeResponse writes the response to the client,
+// accept 2 response types, text(csv) or json
+// if request does not send accept header, default response is json
+func writeResponse(w http.ResponseWriter, r *http.Request, data interface{}, err *SqldError) int {
+	var acceptHeader = r.Header.Get("Accept")
+
+	// accept csv
+	if acceptHeader == "text/csv" {
+		return writeResponseCsv(w, data, err)
+	}
+
+	// default response is json
+	w.Header().Set("Content-Type", "application/json")
+
+	// If an error occurred, write the error to the response
+	if err != nil {
+		errStr := err.Error()
+		w.WriteHeader(err.Code)
+		json.NewEncoder(w).Encode(Response{
+			Error: &errStr,
+		})
+		return err.Code
+	}
+
+	// To ensure the response is always an array
+	rv := reflect.ValueOf(data)
+	if data == nil || (rv.Kind() != reflect.Struct && rv.IsNil()) {
+		data = EmptyArray
+	}
+
+	// Write data to the response
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(Response{
+		Data: &data,
+	})
+	return http.StatusOK
+}
+
 // handleQuery routes the given request to the proper handler
 // given the request method. If the request method matches
 // no available handlers, it responds with a method not found
@@ -435,14 +614,13 @@ func logRequest(r *http.Request, status int, start time.Time) {
 func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	var err *SqldError
 	var data interface{}
-	status := http.StatusOK
 	start := time.Now()
 
 	if r.URL.Path == "/" {
 		if config.AllowRaw && r.Method == "POST" {
 			data, err = raw(r)
 		} else {
-			err = BadRequest(nil)
+			err = BadRequest(errors.New("invalid raw query request"))
 		}
 	} else {
 		switch r.Method {
@@ -450,38 +628,27 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 			data, err = read(r)
 		case "POST":
 			data, err = create(r)
-			totalWrites++
+			if err != nil {
+				totalWrites++
+			}
 		case "PUT":
 			data, err = update(r)
-			totalWrites++
+			if err != nil {
+				totalWrites++
+			}
 		case "DELETE":
 			data, err = del(r)
-			totalWrites++
+			if err != nil {
+				totalWrites++
+			}
 		default:
 			err = &SqldError{http.StatusMethodNotAllowed, errors.New("MethodNotAllowed")}
 		}
 	}
 
-	// If an error occurred, write the error to the response
-	if err != nil {
-		http.Error(w, err.Error(), err.Code)
-		logRequest(r, err.Code, start)
-		return
-	}
-
-	// If no data was returned, write a 204 NO CONTENT response
-	if data == nil {
-		status := http.StatusNoContent
-		w.WriteHeader(status)
-		logRequest(r, status, start)
-		return
-	}
-
 	// Write the data to the response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-	logRequest(r, http.StatusOK, start)
+	status := writeResponse(w, r, data, err)
+	logRequest(r, status, start)
 }
 
 func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {

@@ -148,6 +148,7 @@ func autoBackup(interval time.Duration, config Config) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Autobackup the database every 5 minutes if there are write operations
 	for {
 		select {
 		case <-ticker.C:
@@ -166,6 +167,7 @@ func selfDbCheck(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// Check if the database connection is still alive
 	for {
 		select {
 		case <-ticker.C:
