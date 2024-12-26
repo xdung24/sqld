@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -13,46 +14,53 @@ const (
 )
 
 type Config struct {
-	AllowRaw       bool   // allow raw sql queries
-	Dsn            string // database source name
-	User           string // database username
-	Pass           string // database password
-	Host           string // database host
-	Dbtype         string // database type
-	Dbname         string // database name
-	Port           int    // server http port
-	Url            string // url prefix
-	SqliteBackup   string // sqlite backup file
-	HealthCheckUrl string // health check url
+	AllowRaw           bool   // allow raw sql queries
+	Dsn                string // database source name
+	User               string // database username
+	Pass               string // database password
+	Host               string // database host
+	Dbtype             string // database type
+	Dbname             string // database name
+	Port               int    // server http port
+	Url                string // url prefix
+	SqliteBackup       string // sqlite backup file
+	HealthCheckUrl     string // health check url
+	HealthCheckInteval int    // health check interval
+	BackupInterval     int    // backup interval
 }
 
+// Order of precedence: command line flag > environment variable > default value
 func parseConfig() Config {
-	var allowRaw = flag.Bool("raw", false, "allow raw sql queries")
-	var dsn = flag.String("dsn", "", "database source name")
-	var user = flag.String("u", "root", "database username")
-	var pass = flag.String("p", "", "database password")
-	var host = flag.String("h", "", "database host")
-	var dbtype = flag.String("type", "sqlite3", "database type")
-	var dbname = flag.String("db", "", "database name")
-	var port = flag.Int("port", 8080, "http port")
-	var url = flag.String("url", "/", "url prefix")
-	var sqliteBackup = flag.String("sqliteBackup", "", "sqlite backup file")
-	var healthCheckUrl = flag.String("healthCheckUrl", "http://localhost:8080/health", "health check url")
+	var allowRaw = flag.Bool("raw", getEnvAsBool("ALLOW_RAW", false), "allow raw sql queries")
+	var dsn = flag.String("dsn", getEnv("DSN", ""), "database source name")
+	var user = flag.String("u", getEnv("DB_USER", "root"), "database username")
+	var pass = flag.String("p", getEnv("DB_PASS", ""), "database password")
+	var host = flag.String("h", getEnv("DB_HOST", ""), "database host")
+	var dbtype = flag.String("type", getEnv("DB_TYPE", "sqlite3"), "database type")
+	var dbname = flag.String("db", getEnv("DB_NAME", ""), "database name")
+	var port = flag.Int("port", getEnvAsInt("PORT", 8080), "http port")
+	var url = flag.String("url", getEnv("URL", "/"), "url prefix")
+	var sqliteBackup = flag.String("sqliteBackup", getEnv("SQLITE_BACKUP", ""), "sqlite backup file")
+	var healthCheckUrl = flag.String("healthCheckUrl", getEnv("HEALTH_CHECK_URL", "http://localhost:8080/health"), "health check url")
+	var healthCheckInterval = flag.Int("healthCheckInterval", getEnvAsInt("HEALTH_CHECK_INTERVAL", 1), "health check interval (minutes)")
+	var backupInterval = flag.Int("backupInterval", getEnvAsInt("BACKUP_INTERVAL", 5), "backup interval - only for sqlite memory (minutes)")
 
 	flag.Parse()
 
 	return Config{
-		AllowRaw:       *allowRaw,
-		Dsn:            *dsn,
-		User:           *user,
-		Pass:           *pass,
-		Host:           *host,
-		Dbtype:         *dbtype,
-		Dbname:         *dbname,
-		Port:           *port,
-		Url:            *url,
-		SqliteBackup:   *sqliteBackup,
-		HealthCheckUrl: *healthCheckUrl,
+		AllowRaw:           *allowRaw,
+		Dsn:                *dsn,
+		User:               *user,
+		Pass:               *pass,
+		Host:               *host,
+		Dbtype:             *dbtype,
+		Dbname:             *dbname,
+		Port:               *port,
+		Url:                *url,
+		SqliteBackup:       *sqliteBackup,
+		HealthCheckUrl:     *healthCheckUrl,
+		HealthCheckInteval: *healthCheckInterval,
+		BackupInterval:     *backupInterval,
 	}
 }
 
@@ -104,16 +112,19 @@ func usage() {
     sqld [options]
 
 Options:
-  -u, --user       Database username (default: root)
-  -p, --pass       Database password
-  -h, --host       Database host (default: localhost)
-  -type, --dbtype  Database type (default: sqlite3)
-  -db, --dbname    Database name
-  -port, --port    HTTP port (default: 8080)
-  -url, --url      URL prefix (default: /)
-  -dsn, --dsn      Database source name (default: file::memory:)
-  -raw, --allowRaw Allow raw SQL queries (default: false)
-  -sqliteBackup    SQLite backup file when using sqlite3 memcache (default: db.sqlite)
+  -u, --user           Database username (default: root)
+  -p, --pass           Database password
+  -h, --host           Database host (default: localhost)
+  -type, --dbtype      Database type (default: sqlite3)
+  -db, --dbname        Database name
+  -port, --port        HTTP port (default: 8080)
+  -url, --url          URL prefix (default: /)
+  -dsn, --dsn          Database source name (default: file::memory:)
+  -raw, --allowRaw     Allow raw SQL queries (default: false)
+  -sqliteBackup        SQLite backup file when using sqlite3 memcache (default: db.sqlite)
+  -healthCheckUrl      Health check URL (default: http://localhost:8080/health)
+  -healthCheckInterval Health check interval in minutes (default: 1)
+  -backupInterval      Backup interval in minutes (default: 5)
 
 Example:
   sqld -u root -p password -db mydatabase -h localhost:3306 -type mysql -port 8080 -url /api
@@ -136,4 +147,29 @@ func HandleFlags() Config {
 // IsSqlite3Memcache returns true if the database is sqlite3 memcache and sqlite backup file is set
 func (c *Config) IsSqlite3Memcache() bool {
 	return c.Dbtype == "sqlite3" && strings.HasPrefix(c.Dsn, "file::memory:") && c.SqliteBackup != ""
+}
+
+func getEnv(key string, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(name string, defaultValue int) int {
+	if valueStr, exists := os.LookupEnv(name); exists {
+		if value, err := strconv.Atoi(valueStr); err == nil {
+			return value
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(name string, defaultValue bool) bool {
+	if valueStr, exists := os.LookupEnv(name); exists {
+		if value, err := strconv.ParseBool(valueStr); err == nil {
+			return value
+		}
+	}
+	return defaultValue
 }

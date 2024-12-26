@@ -88,22 +88,13 @@ func main() {
 	}()
 
 	// Run the timer to check if the database connection is still alive
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			err := db.Ping()
-			if err != nil {
-				log.Fatalf("Database connection lost: %s\n", err)
-			}
-		}
-	}()
-
-	// Run the timer to save db to file if the database is sqlite3 memcache every 5 minutes
-	go autoBackup(5*time.Minute, config)
+	go selfDbCheck(time.Duration(config.HealthCheckInteval) * time.Minute)
 
 	// Run timer to self health check
-	go selfHealthCheck(1*time.Minute, config)
+	go selfHealthCheck(time.Duration(config.HealthCheckInteval)*time.Minute, config)
+
+	// Run the timer to save db to file if the database is sqlite3 memcache every 5 minutes
+	go autoBackup(time.Duration(config.BackupInterval)*time.Minute, config)
 
 	// Start the server
 	log.Printf("sqld listening on port %d", config.Port)
@@ -170,6 +161,24 @@ func autoBackup(interval time.Duration, config Config) {
 	}
 }
 
+// Close app if lose connection to db
+func selfDbCheck(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := db.Ping(); err != nil {
+				log.Println("Database connection lost, backing up database...")
+				os.Exit(1)
+			}
+		case <-context.Background().Done():
+			return
+		}
+	}
+}
+
 // selfHealthCheck periodically checks if the server is still alive
 func selfHealthCheck(duration time.Duration, config Config) {
 	ticker := time.NewTicker(duration)
@@ -179,7 +188,6 @@ func selfHealthCheck(duration time.Duration, config Config) {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("Self health checking...")
 			if _, err := http.Get(config.HealthCheckUrl); err != nil {
 				// Backoff for 5 seconds before retrying
 				time.Sleep(5 * time.Second)
