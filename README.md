@@ -77,32 +77,33 @@ The url prefix to use. For example `-url api` will serve requests from `http://h
 ### Example startup
 
 Sqlite3 memory
-sqld -type sqlite3 -dsn file::memory:
-sqld -raw -type sqlite3 -dsn file::memory:
-sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -backupInterval 5
-sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url /
-sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5
+
+sqld -type sqlite3 -dsn file::memory:  
+sqld -raw -type sqlite3 -dsn file::memory:  
+sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -backupInterval 5  
+sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url /  
+sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5  
 
 Sqlite3 file
-sqld -type sqlite3 -dsn file:test.db
-sqld -raw -type sqlite3 -dsn file:test.db
-sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -backupInterval 5
-sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url /
-sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5
+sqld -type sqlite3 -dsn file:test.db  
+sqld -raw -type sqlite3 -dsn file:test.db  
+sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -backupInterval 5  
+sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url /  
+sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5  
 
 Postgres
-sqld -type postgres
-sqld -raw -type postgres
-sqld -raw -type postgres -h localhost -p 5432 -u postgres -p changeme -db testdb
-sqld -raw -type postgres -dsn postgres://postgres:changeme@localhost:5432/testdb?sslmode=disable
-sqld -raw -type postgres -dsn postgres://postgres:changeme@localhost:5432/testdb?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1
+sqld -type postgres  
+sqld -raw -type postgres  
+sqld -raw -type postgres -h localhost -p 5432 -u postgres -p changeme -db testdb  
+sqld -raw -type postgres -dsn postgres://postgres:changeme@localhost:5432/testdb?sslmode=disable  
+sqld -raw -type postgres -dsn postgres://postgres:changeme@localhost:5432/testdb?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1  
 
 Mysql/Mariadb
-sqld -type mysql
-sqld -raw -type mysql
-sqld -raw -type mysql -h localhost -p 3306 -u root -p changeme -db testdb
-sqld -raw -type mysql -dsn root:changeme@(localhost:3306)/testdb?parseTime=true
-sqld -raw -type mysql -dsn postgres://postgres:changeme@localhost:5432/?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1
+sqld -type mysql  
+sqld -raw -type mysql  
+sqld -raw -type mysql -h localhost -p 3306 -u root -p changeme -db testdb  
+sqld -raw -type mysql -dsn root:changeme@(localhost:3306)/testdb?parseTime=true  
+sqld -raw -type mysql -dsn postgres://postgres:changeme@localhost:5432/?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1  
 
 
 Query
