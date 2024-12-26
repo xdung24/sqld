@@ -54,7 +54,7 @@ The `dsn` is the data source name for the database, used when making the initial
 
 * **Postgres** : For Postgres the format looks like `postgres://{user}:{password}@{host}/{database_name}?sslmode=disable`. More info on Postgres dsn values: https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters
 
-* **SQLite** : For SQLite the format can be a file name `test.db` or `file:test.db?cache=shared&mode=memory` or an in-memory store with `:memory:`.  More info on SQLite dsn values: https://godoc.org/github.com/mattn/go-sqlite3#SQLiteDriver.Open
+* **SQLite** : For SQLite the format can be a file name `test.db` or `file:test.db` or an in-memory store with `:memory:`.  More info on SQLite dsn values: https://godoc.org/github.com/mattn/go-sqlite3#SQLiteDriver.Open
 
 ### -h
 The database hostname. For example, running locally, MySQL will generally be `localhost:3306` and for Postgres `localhost:5432`.
@@ -73,6 +73,37 @@ The database username.
 
 ### -url
 The url prefix to use. For example `-url api` will serve requests from `http://hostname:port/api/table` or `-url foo/bar` will serve requests from `http://hostname:port/foo/bar/table`.
+
+### Example startup
+
+Sqlite3 memory
+sqld -type sqlite3 -dsn file::memory:
+sqld -raw -type sqlite3 -dsn file::memory:
+sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -backupInterval 5
+sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url /
+sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5
+
+Sqlite3 file
+sqld -type sqlite3 -dsn file:test.db
+sqld -raw -type sqlite3 -dsn file:test.db
+sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -backupInterval 5
+sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url /
+sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5
+
+Postgres
+sqld -type postgres
+sqld -raw -type postgres
+sqld -raw -type postgres -h localhost -p 5432 -u postgres -p changeme -db testdb
+sqld -raw -type postgres -dsn postgres://postgres:changeme@localhost:5432/testdb?sslmode=disable
+sqld -raw -type postgres -dsn postgres://postgres:changeme@localhost:5432/testdb?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1
+
+Mysql/Mariadb
+sqld -type mysql
+sqld -raw -type mysql
+sqld -raw -type mysql -h localhost -p 3306 -u root -p changeme -db testdb
+sqld -raw -type mysql -dsn root:changeme@(localhost:3306)/testdb?parseTime=true
+sqld -raw -type mysql -dsn postgres://postgres:changeme@localhost:5432/?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1
+
 
 Query
 -----

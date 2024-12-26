@@ -40,7 +40,7 @@ func main() {
 	log.Println("Connected to the database.")
 
 	// Load db backup from file if the database is sqlite3 memcache
-	if config.IsSqlite3Memcache() && fileExists(config.SqliteBackup) {
+	if config.CanBackup() && fileExists(config.SqliteBackup) {
 		log.Println("Restoring database...")
 		backupdb, _, err := InitSQLite(sqlx.Connect, "sqlite3", config.SqliteBackup)
 		if err != nil {
@@ -124,7 +124,7 @@ func fileExists(filePath string) bool {
 
 // Save db to file if the database is sqlite3 memcache
 func backupSqlite(config Config) {
-	if config.IsSqlite3Memcache() {
+	if config.CanBackup() {
 		log.Println("Backing up database...")
 		backupdb, _, err := InitSQLite(sqlx.Connect, "sqlite3", config.SqliteBackup)
 		if err != nil {
@@ -183,6 +183,10 @@ func selfDbCheck(interval time.Duration) {
 
 // selfHealthCheck periodically checks if the server is still alive
 func selfHealthCheck(duration time.Duration, config Config) {
+	if config.HealthCheckUrl == "" {
+		return
+	}
+
 	ticker := time.NewTicker(duration)
 	defer ticker.Stop()
 

@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
@@ -37,7 +39,6 @@ type Response struct {
 
 // ExecResult is a generic response struct for exec queries
 type ExecResult struct {
-	LastInsertID int64 `json:"last_insert_id"`
 	RowsAffected int64 `json:"rows_affected"`
 }
 
@@ -142,7 +143,11 @@ func buildUpdateQuery(r *http.Request, values map[string]interface{}) (string, [
 	query := sq.Update("").Table(table)
 
 	for key, val := range values {
-		query = query.SetMap(squirrel.Eq{key: val})
+		quotedKey := fmt.Sprintf("\"%s\"", key)
+		if config.Dbtype == "mysql" {
+			quotedKey = fmt.Sprintf("`%s`", key)
+		}
+		query = query.SetMap(squirrel.Eq{quotedKey: val})
 	}
 
 	if id != "" {
@@ -251,13 +256,17 @@ func read(r *http.Request) (interface{}, *SqldError) {
 
 // createSingle handles the POST method when only a single model
 // is provided in the request body.
-func createSingle(table string, item map[string]interface{}) (map[string]interface{}, error) {
+func createSingle(table string, item map[string]interface{}) (interface{}, error) {
 	columns := make([]string, len(item))
 	values := make([]interface{}, len(item))
 
 	i := 0
 	for c, val := range item {
-		columns[i] = c
+		if config.Dbtype == "mysql" {
+			columns[i] = fmt.Sprintf("`%s`", c)
+		} else {
+			columns[i] = fmt.Sprintf("\"%s\"", c)
+		}
 		values[i] = val
 		i++
 	}
@@ -275,12 +284,8 @@ func createSingle(table string, item map[string]interface{}) (map[string]interfa
 	if err != nil {
 		return nil, err
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-	item["id"] = id
-	return item, nil
+	rowsAffected, _ := res.RowsAffected()
+	return ExecResult{RowsAffected: rowsAffected}, nil
 }
 
 // create handles the POST method.
@@ -298,12 +303,11 @@ func create(r *http.Request) (interface{}, *SqldError) {
 		return nil, BadRequest(err)
 	}
 
-	// Get the table name from the request path
-	table, _, _ := parseRequest(r)
-
 	// Map item data into interface and create a single item
 	item, ok := data.(map[string]interface{})
 	if ok {
+		// Get the table name from the request path
+		table, _, _ := parseRequest(r)
 		saved, err := createSingle(table, item)
 		if err != nil {
 			return nil, BadRequest(err)
@@ -355,17 +359,12 @@ func execQuery(sql string, args []interface{}) (interface{}, *SqldError) {
 		return nil, BadRequest(err)
 	}
 
-	lastInsertId, err := res.LastInsertId()
-	if err != nil {
-		return nil, BadRequest(err)
-	}
-
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return nil, BadRequest(err)
 	}
 
-	return ExecResult{LastInsertID: lastInsertId, RowsAffected: rowsAffected}, nil
+	return ExecResult{RowsAffected: rowsAffected}, nil
 }
 
 // detectQueryType determines if the SQL query is a read or write operation
@@ -432,13 +431,9 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 		if err != nil {
 			return nil, BadRequest(err)
 		}
-		lastID, _ := res.LastInsertId()
 		rAffect, _ := res.RowsAffected()
 		totalWrites++
-		return map[string]interface{}{
-			"last_insert_id": lastID,
-			"rows_affected":  rAffect,
-		}, nil
+		return ExecResult{RowsAffected: rAffect}, nil
 	}
 
 	// If the query type is unknown, return a bad request
@@ -492,8 +487,8 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 	if rv.Kind() == reflect.Struct {
 		w.WriteHeader(http.StatusOK)
 		if result, ok := data.(ExecResult); ok {
-			w.Write([]byte("last_insert_id,rows_affected\n"))
-			w.Write([]byte(fmt.Sprintf("%v,%v\n", result.LastInsertID, result.RowsAffected)))
+			w.Write([]byte("rows_affected\n"))
+			w.Write([]byte(fmt.Sprintf("%v\n", result.RowsAffected)))
 		}
 		return http.StatusOK
 	}

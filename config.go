@@ -41,7 +41,7 @@ func parseConfig() Config {
 	var port = flag.Int("port", getEnvAsInt("PORT", 8080), "http port")
 	var url = flag.String("url", getEnv("URL", "/"), "url prefix")
 	var sqliteBackup = flag.String("sqliteBackup", getEnv("SQLITE_BACKUP", ""), "sqlite backup file")
-	var healthCheckUrl = flag.String("healthCheckUrl", getEnv("HEALTH_CHECK_URL", "http://localhost:8080/health"), "health check url")
+	var healthCheckUrl = flag.String("healthCheckUrl", getEnv("HEALTH_CHECK_URL", ""), "health check url")
 	var healthCheckInterval = flag.Int("healthCheckInterval", getEnvAsInt("HEALTH_CHECK_INTERVAL", 1), "health check interval (minutes)")
 	var backupInterval = flag.Int("backupInterval", getEnvAsInt("BACKUP_INTERVAL", 5), "backup interval - only for sqlite memory (minutes)")
 
@@ -115,7 +115,7 @@ Options:
   -u, --user           Database username (default: root)
   -p, --pass           Database password
   -h, --host           Database host (default: localhost)
-  -type, --dbtype      Database type (default: sqlite3)
+  -type, --dbtype      Database type (default: sqlite3, other supported: mysql, postgres)
   -db, --dbname        Database name
   -port, --port        HTTP port (default: 8080)
   -url, --url          URL prefix (default: /)
@@ -144,9 +144,9 @@ func HandleFlags() Config {
 	return config
 }
 
-// IsSqlite3Memcache returns true if the database is sqlite3 memcache and sqlite backup file is set
-func (c *Config) IsSqlite3Memcache() bool {
-	return c.Dbtype == "sqlite3" && strings.HasPrefix(c.Dsn, "file::memory:") && c.SqliteBackup != ""
+// CanBackup returns true if the database is sqlite3 and sqlite backup file is set
+func (c *Config) CanBackup() bool {
+	return c.Dbtype == "sqlite3" && c.SqliteBackup != ""
 }
 
 func getEnv(key string, defaultValue string) string {
