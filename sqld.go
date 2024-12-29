@@ -596,9 +596,7 @@ func writeResponse(w http.ResponseWriter, r *http.Request, data interface{}, err
 
 	// Write data to the response
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(Response{
-		Data: &data,
-	})
+	json.NewEncoder(w).Encode(data)
 	return http.StatusOK
 }
 
