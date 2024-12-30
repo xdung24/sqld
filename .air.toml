@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = ["-raw", "-type", "sqlite3", "-dsn", "file::memory:?cache=shared", "-sqliteBackup", "./tmp/db.sqlite"]
   bin = "tmp\\sqld.exe"
-  cmd = "go build -o ./tmp/sqld.exe ."
+  cmd = "sh ./build.sh"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []

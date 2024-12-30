@@ -26,6 +26,8 @@ func main() {
 	fmt.Println(`*** Note: This application is only for development environment. ***
 *** Do not use it in production without additional security (ssl, authentication, rate limit) ***`)
 
+	printInfo()
+
 	log.SetOutput(os.Stdout)
 
 	config = HandleFlags()
