@@ -10,6 +10,8 @@ echo "GO_ARCH: $GO_ARCH"
 echo "GIT_HASH: $GIT_HASH"
 echo "BUILD_TIME: $BUILD_TIME"
 
-ldflags="-X main.GoOs=$GO_OS -X main.GoArch=$GO_ARCH -X main.GitHash=$GIT_HASH -X main.BuildTime=$BUILDTIME"
+ldflags="-X main.GoOs=$GO_OS -X main.GoArch=$GO_ARCH -X main.GitHash=$GIT_HASH -X main.BuildTime=$BUILD_TIME"
+echo $ldflags
+echo "building sqld"
 go mod download
-CGO_ENABLED=1 go build -o ./tmp/sqld.exe -x --ldflags="$ldflags"
+CGO_ENABLED=1 go build -o ./tmp/sqld.exe --ldflags="$ldflags"

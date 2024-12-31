@@ -26,11 +26,13 @@ func main() {
 	fmt.Println(`*** Note: This application is only for development environment. ***
 *** Do not use it in production without additional security (ssl, authentication, rate limit) ***`)
 
-	printInfo()
-
 	log.SetOutput(os.Stdout)
 
 	config = HandleFlags()
+	if config.Debug {
+		printInfo()
+		config.print()
+	}
 
 	var err error
 
@@ -61,7 +63,6 @@ func main() {
 
 	// Create http server
 	http.HandleFunc(config.Url, HandleQuery)
-	http.HandleFunc("/health", HandleHealthCheck)
 	server := &http.Server{Addr: fmt.Sprintf(":%d", config.Port)}
 
 	// Signal handling

@@ -1,0 +1,3 @@
+mariadb/data/*
+postgresql/data/*
+sqlite3/data/*

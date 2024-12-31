@@ -27,6 +27,7 @@ type Config struct {
 	HealthCheckUrl     string // health check url
 	HealthCheckInteval int    // health check interval
 	BackupInterval     int    // backup interval
+	Debug              bool   // debug mode
 }
 
 // Order of precedence: command line flag > environment variable > default value
@@ -44,6 +45,7 @@ func parseConfig() Config {
 	var healthCheckUrl = flag.String("healthCheckUrl", getEnv("HEALTH_CHECK_URL", ""), "health check url")
 	var healthCheckInterval = flag.Int("healthCheckInterval", getEnvAsInt("HEALTH_CHECK_INTERVAL", 1), "health check interval (minutes)")
 	var backupInterval = flag.Int("backupInterval", getEnvAsInt("BACKUP_INTERVAL", 5), "backup interval - only for sqlite memory (minutes)")
+	var debug = flag.Bool("debug", getEnvAsBool("DEBUG", false), "debug mode")
 
 	flag.Parse()
 
@@ -61,6 +63,7 @@ func parseConfig() Config {
 		HealthCheckUrl:     *healthCheckUrl,
 		HealthCheckInteval: *healthCheckInterval,
 		BackupInterval:     *backupInterval,
+		Debug:              *debug,
 	}
 }
 
@@ -125,7 +128,8 @@ Options:
   -healthCheckUrl      Health check URL (default: http://localhost:8080/health)
   -healthCheckInterval Health check interval in minutes (default: 1)
   -backupInterval      Backup interval in minutes (default: 5)
-
+  -debug               Debug mode (default: false)
+  
 Example:
   sqld -u root -p password -db mydatabase -h localhost:3306 -type mysql -port 8080 -url /api
 `
@@ -172,4 +176,27 @@ func getEnvAsBool(name string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
+}
+
+func (config *Config) print() {
+	fmt.Println("Config:")
+	fmt.Println("  AllowRaw:", config.AllowRaw)
+	fmt.Println("  Dsn:", config.Dsn)
+	fmt.Println("  User:", config.User)
+	fmt.Println("  Pass:", config.Pass)
+	fmt.Println("  Host:", config.Host)
+	fmt.Println("  Dbtype:", config.Dbtype)
+	fmt.Println("  Dbname:", config.Dbname)
+	fmt.Println("  Port:", config.Port)
+	fmt.Println("  Url:", config.Url)
+	fmt.Println("  SqliteBackup:", config.SqliteBackup)
+	fmt.Println("  HealthCheckUrl:", config.HealthCheckUrl)
+	fmt.Println("  HealthCheckInteval:", config.HealthCheckInteval)
+	fmt.Println("  BackupInterval:", config.BackupInterval)
+}
+
+// IsBaseUrl returns true if the url is the same as the base url or
+// the base url is a prefix of the url
+func (c *Config) IsBaseUrl(url string) bool {
+	return url == c.Url || url+"/" == c.Url
 }

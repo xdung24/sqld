@@ -16,18 +16,16 @@ RUN go mod download
 COPY . .
 
 # Build the binary.
-RUN mkdir -p tmp && sh build.sh
+RUN mkdir -p tmp && sh build.sh && ls -lah /app/tmp
 
 # Use the official Debian slim image for a production container.
 # https://hub.docker.com/_/debian
-FROM alpine:3.20 AS production
+FROM debian:bookworm-slim AS production
 
-RUN apk add --no-cache ca-certificates
+RUN apt-get update -y && apt-get upgrade -y && apt-get install -y ca-certificates bash curl wget && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/tmp/sqld.exe /usr/local/bin/sqld
 
-
-
-# Set entrypoint
-ENTRYPOINT ["sqld"]	
+# Entrypoint
+ENTRYPOINT ["/usr/local/bin/sqld"]

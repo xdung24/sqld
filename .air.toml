@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["-raw", "-type", "sqlite3", "-dsn", "file::memory:?cache=shared", "-sqliteBackup", "./tmp/db.sqlite"]
+  args_bin = ["-raw", "-type", "sqlite3", "-dsn", "file::memory:?cache=shared", "-sqliteBackup", "./tmp/db.sqlite", "-url", "/api/v1", "-debug"]
   bin = "tmp\\sqld.exe"
   cmd = "sh ./build.sh"
   delay = 1000

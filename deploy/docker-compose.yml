@@ -1,0 +1,89 @@
+services:
+  sqld_sqlite:
+    image: "xdung24/sqld:latest"
+    container_name: "sqld_sqlite"
+    environment:
+      ALLOW_RAW: true 
+      PORT: 8080
+      DB_TYPE: "sqlite3"
+      DSN: "file::memory:"
+      URL: "/api/v1/"
+      HEALTH_CHECK_URL: "http://localhost:8080/api/v1"
+      HEALTH_CHECK_INTERVAL: 1
+      SQLITE_BACKUP: "/app/sqlite3.db"
+      BACKUP_INTERVAL: 5
+    networks:
+      - "network"
+    ports:
+    - "8001:8080"
+    volumes:
+      - ./sqlite3/data:/app
+
+  database_postgres:
+    image: "postgres:17"
+    container_name: "database_postgres"
+    environment: 
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "changeme"
+    ports:
+      - "5432:5432"
+    networks:
+      - "network"
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+      - ./postgresql/init:/docker-entrypoint-initdb.d
+
+  sqld_postgres:
+    image: "xdung24/sqld:latest"
+    container_name: "sqld_postgres"
+    environment:
+      ALLOW_RAW: true 
+      PORT: 8080
+      DB_TYPE: "postgres"
+      DB_HOST: "database_postgres:5432"
+      DB_NAME: "sqld"
+      DB_USER: "postgres"
+      DB_PASS: "changeme"
+      URL: "/api/v1/"
+      HEALTH_CHECK_URL: "http://localhost:8080/api/v1"
+      HEALTH_CHECK_INTERVAL: 1
+    networks:
+      - "network"
+    ports:
+    - "8002:8080"
+  
+  database_mariadb:
+    image: "mariadb:11-ubi"
+    container_name: "database_mariadb"
+    environment: 
+      MYSQL_ROOT_PASSWORD: "changeme"
+    ports:
+      - "3306:3306"
+    networks:
+      - "network"
+    volumes:
+      - ./mariadb/data:/var/lib/mysql
+      - ./mariadb/init:/docker-entrypoint-initdb.d
+
+  sqld_mariadb:
+    image: "xdung24/sqld:latest"
+    container_name: "sqld_mariadb"
+    environment:
+      ALLOW_RAW: true 
+      PORT: 8080
+      DB_TYPE: "mysql"
+      DB_HOST: "database_mariadb:3306"
+      DB_NAME: "sqld"
+      DB_USER: "root"
+      DB_PASS: "changeme"
+      URL: "/api/v1/"
+      HEALTH_CHECK_URL: "http://localhost:8080/api/v1"
+      HEALTH_CHECK_INTERVAL: 1
+    networks:
+      - "network"
+    ports:
+    - "8003:8080"
+
+networks:
+  network:
+    driver: bridge

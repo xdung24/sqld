@@ -98,14 +98,15 @@ func CloseDB() error {
 	return nil
 }
 
-func parseRequest(r *http.Request) (string, map[string][]string, string) {
+func parseRequest(r *http.Request) (table string, args map[string][]string, id string) {
 	paths := strings.Split(strings.TrimPrefix(r.URL.Path, config.Url), "/")
-	table := paths[0]
-	id := ""
+	table = paths[0]
+	args = r.URL.Query()
+	id = ""
 	if len(paths) > 1 {
 		id = paths[1]
 	}
-	return table, r.URL.Query(), id
+	return
 }
 
 func buildSelectQuery(r *http.Request) (string, []interface{}, error) {
@@ -608,12 +609,19 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	var err *SqldError
 	var data interface{}
 	start := time.Now()
-
-	if r.URL.Path == "/" {
+	log.Printf("%s %s %s", r.Method, r.URL.String(), r.URL.Path)
+	if config.IsBaseUrl(r.URL.Path) {
 		if config.AllowRaw && r.Method == "POST" {
 			data, err = raw(r)
 		} else {
-			err = BadRequest(errors.New("invalid raw query request"))
+			// Health check
+			start := time.Now()
+			if db.Ping() == nil {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			logRequest(r, http.StatusOK, start)
 		}
 	} else {
 		switch r.Method {
@@ -642,10 +650,6 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	// Write the data to the response
 	status := writeResponse(w, r, data, err)
 	logRequest(r, status, start)
-}
-
-func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 }
 
 // backup copies the contents of the source database to the destination database using the SQLite backup API.
