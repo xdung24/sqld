@@ -508,7 +508,7 @@ func quoteMinimal(field string) string {
 }
 
 // writeResponseCsv writes the response to the client in csv format
-func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) int {
+func writeResponseCsv(w http.ResponseWriter, acceptHeader string, data interface{}, err *SqldError) int {
 	// If an error occurred, write the error to the response
 	if err != nil {
 		http.Error(w, err.Error(), err.Code)
@@ -522,9 +522,15 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 	}
 
 	// write csv response
-	w.Header().Set("Content-Type", "text/csv")
-	rv := reflect.ValueOf(data)
+	seperator := ","
+	contentType := "text/csv"
+	if acceptHeader == "text/tsv" {
+		seperator = "\t"
+		contentType = "text/tsv"
+	}
+	w.Header().Set("Content-Type", contentType)
 
+	rv := reflect.ValueOf(data)
 	if rv.Kind() == reflect.Struct {
 		w.WriteHeader(http.StatusOK)
 		if result, ok := data.(ExecResult); ok {
@@ -554,7 +560,7 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 		for key := range data.(map[string]interface{}) {
 			headers = append(headers, key)
 		}
-		w.Write([]byte(strings.Join(headers, ",") + "\n"))
+		w.Write([]byte(strings.Join(headers, seperator) + "\n"))
 		// get the values
 		var row []string
 		for _, header := range headers {
@@ -565,7 +571,7 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 			}
 			row = append(row, quoteMinimal(valStr))
 		}
-		w.Write([]byte(strings.Join(row, ",") + "\n"))
+		w.Write([]byte(strings.Join(row, seperator) + "\n"))
 		return http.StatusOK
 	}
 
@@ -583,7 +589,7 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 		for key := range rv.Index(0).Interface().(map[string]interface{}) {
 			headers = append(headers, key)
 		}
-		w.Write([]byte(strings.Join(headers, ",") + "\n"))
+		w.Write([]byte(strings.Join(headers, seperator) + "\n"))
 
 		// write the data
 		for _, item := range data.([]map[string]interface{}) {
@@ -596,7 +602,7 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 				}
 				row = append(row, quoteMinimal(valStr))
 			}
-			w.Write([]byte(strings.Join(row, ",") + "\n"))
+			w.Write([]byte(strings.Join(row, seperator) + "\n"))
 		}
 
 		return http.StatusOK
@@ -611,9 +617,9 @@ func writeResponseCsv(w http.ResponseWriter, data interface{}, err *SqldError) i
 func writeResponse(w http.ResponseWriter, r *http.Request, data interface{}, err *SqldError) int {
 	var acceptHeader = r.Header.Get("Accept")
 
-	// accept csv
-	if acceptHeader == "text/csv" {
-		return writeResponseCsv(w, data, err)
+	// accept csv and tsv
+	if acceptHeader == "text/csv" || acceptHeader == "text/tsv" {
+		return writeResponseCsv(w, acceptHeader, data, err)
 	}
 
 	// default response is json
