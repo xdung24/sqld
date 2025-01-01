@@ -449,6 +449,9 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 		log.Printf("[DEBUG] Raw query: %s", query.SqlQuery)
 	}
 
+	// Trim the query
+	query.SqlQuery = strings.TrimSpace(query.SqlQuery)
+
 	// Check if the query is empty
 	if query.SqlQuery == "" {
 		return nil, BadRequest(errors.New("empty query"))
