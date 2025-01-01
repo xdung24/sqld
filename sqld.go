@@ -395,26 +395,63 @@ func detectQueryType(query string) string {
 // Suport content type application/json and text/plain, application/json is default
 // Type of action will be detected by the first word of the query
 func raw(r *http.Request) (interface{}, *SqldError) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, BadRequest(err)
-	}
-	defer r.Body.Close()
-
 	var query RawQuery
 
 	// Read the sql query from the request body
 	var contentType = r.Header.Get("Content-Type")
 	if contentType == "text/plain" {
-		query.SqlQuery = string(body)
-		if query.SqlQuery == "" {
-			return nil, BadRequest(errors.New("invalid raw query request"))
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, BadRequest(err)
 		}
-	} else {
+		defer r.Body.Close()
+		query.SqlQuery = string(body)
+	} else if contentType == "application/json" {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, BadRequest(err)
+		}
+		defer r.Body.Close()
 		err = json.Unmarshal(body, &query)
 		if err != nil {
 			return nil, BadRequest(err)
 		}
+	} else if strings.HasPrefix(contentType, "multipart/form-data") || contentType == "application/x-www-form-urlencoded" {
+		r.ParseMultipartForm(0)
+		// Read from form value
+		query.SqlQuery = r.FormValue("sql")
+
+		// Read form post form value
+		if query.SqlQuery == "" {
+			query.SqlQuery = r.PostFormValue("sql")
+		}
+
+		// Read from form file
+		if query.SqlQuery == "" && r.MultipartForm != nil {
+			sqlFile := r.MultipartForm.File["sql"]
+			if len(sqlFile) > 0 {
+				file, err := sqlFile[0].Open()
+				if err == nil {
+					sqlFileContent, err := io.ReadAll(file)
+					if err == nil {
+						query.SqlQuery = string(sqlFileContent)
+					}
+				}
+				defer file.Close()
+			}
+		}
+	} else {
+		return nil, BadRequest(errors.New("not supported content type"))
+	}
+
+	// Log the query
+	if config.Debug {
+		log.Printf("[DEBUG] Raw query: %s", query.SqlQuery)
+	}
+
+	// Check if the query is empty
+	if query.SqlQuery == "" {
+		return nil, BadRequest(errors.New("empty query"))
 	}
 
 	// Execute the query
@@ -609,7 +646,6 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	var err *SqldError
 	var data interface{}
 	start := time.Now()
-	log.Printf("%s %s %s", r.Method, r.URL.String(), r.URL.Path)
 	if config.IsBaseUrl(r.URL.Path) {
 		if config.AllowRaw && r.Method == "POST" {
 			data, err = raw(r)
