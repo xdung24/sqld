@@ -667,6 +667,7 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 			logRequest(r, http.StatusOK, start)
+			return
 		}
 	} else {
 		switch r.Method {
