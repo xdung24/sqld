@@ -40,10 +40,11 @@ services:
       ALLOW_RAW: true 
       PORT: 8080
       DB_TYPE: "postgres"
-      DB_HOST: "database_postgres:5432"
-      DB_NAME: "sqld"
-      DB_USER: "postgres"
-      DB_PASS: "changeme"
+      # DB_HOST: "database_postgres:5432"
+      # DB_NAME: "sqld"
+      # DB_USER: "postgres"
+      # DB_PASS: "changeme"
+      DSN: "postgres://postgres:changeme@database_postgres:5432/sqld?sslmode=disable"
       URL: "/api/v1/"
       HEALTH_CHECK_URL: "http://localhost:8080/api/v1"
       HEALTH_CHECK_INTERVAL: 1
@@ -72,10 +73,11 @@ services:
       ALLOW_RAW: true 
       PORT: 8080
       DB_TYPE: "mysql"
-      DB_HOST: "database_mariadb:3306"
-      DB_NAME: "sqld"
-      DB_USER: "root"
-      DB_PASS: "changeme"
+      # DB_HOST: "database_mariadb:3306"
+      # DB_NAME: "sqld"
+      # DB_USER: "root"
+      # DB_PASS: "changeme"
+      DSN: "root:changeme@tcp(database_mariadb:3306)/sqld?parseTime=true"
       URL: "/api/v1/"
       HEALTH_CHECK_URL: "http://localhost:8080/api/v1"
       HEALTH_CHECK_INTERVAL: 1

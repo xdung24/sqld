@@ -102,8 +102,8 @@ Mysql/Mariadb
 sqld -type mysql  
 sqld -raw -type mysql  
 sqld -raw -type mysql -h localhost -p 3306 -u root -p changeme -db testdb  
-sqld -raw -type mysql -dsn root:changeme@(localhost:3306)/testdb?parseTime=true  
-sqld -raw -type mysql -dsn postgres://postgres:changeme@localhost:5432/?sslmode=disable -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1  
+sqld -raw -type mysql -dsn root:changeme@tcp(database_mariadb:3306)/sqld?parseTime=true  
+sqld -raw -type mysql -dsn root:changeme@tcp(database_mariadb:3306)/sqld?parseTime=true -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1  
 
 
 Query
