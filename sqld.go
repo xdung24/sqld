@@ -291,6 +291,11 @@ func createSingle(table string, item map[string]interface{}) (interface{}, error
 
 // create handles the POST method.
 func create(r *http.Request) (interface{}, *SqldError) {
+	var contentType = r.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		return nil, BadRequest(errors.New("invalid content type"))
+	}
+
 	// Read the request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -321,6 +326,11 @@ func create(r *http.Request) (interface{}, *SqldError) {
 
 // update handles the PUT method.
 func update(r *http.Request) (interface{}, *SqldError) {
+	var contentType = r.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		return nil, BadRequest(errors.New("invalid content type"))
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, BadRequest(err)
