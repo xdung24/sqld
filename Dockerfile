@@ -1,6 +1,5 @@
 FROM golang:1.23 AS builder
 
-RUN apt-get update -y && apt-get upgrade -y && apt-get install -y make build-essential
 # Create and change to the app directory.
 WORKDIR /app
 
@@ -20,12 +19,12 @@ RUN mkdir -p tmp && sh build.sh && ls -lah /app/tmp
 
 # Use the official Debian slim image for a production container.
 # https://hub.docker.com/_/debian
-FROM debian:bookworm-slim AS production
-
-RUN apt-get update -y && apt-get upgrade -y && apt-get install -y ca-certificates bash curl wget && rm -rf /var/lib/apt/lists/*
-
+FROM debian:trixie-slim AS production
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /app/tmp/sqld.exe /usr/local/bin/sqld
+
+# test the binary
+RUN sqld --version
 
 # Entrypoint
 ENTRYPOINT ["/usr/local/bin/sqld"]

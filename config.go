@@ -32,6 +32,12 @@ type Config struct {
 
 // Order of precedence: command line flag > environment variable > default value
 func parseConfig() Config {
+	// If has -v flag, print version and exit
+	if len(os.Args) > 1 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		printInfo()
+		os.Exit(0)
+	}
+
 	var allowRaw = flag.Bool("raw", getEnvAsBool("ALLOW_RAW", false), "allow raw sql queries")
 	var dsn = flag.String("dsn", getEnv("DSN", ""), "database source name")
 	var user = flag.String("u", getEnv("DB_USER", "root"), "database username")
@@ -129,6 +135,7 @@ Options:
   -healthCheckInterval Health check interval in minutes (default: 1)
   -backupInterval      Backup interval in minutes (default: 5)
   -debug               Debug mode (default: false)
+  -v                   Print version and exit
   
 Example:
   sqld -u root -p password -db mydatabase -h localhost:3306 -type mysql -port 8080 -url /api
