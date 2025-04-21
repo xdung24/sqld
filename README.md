@@ -197,7 +197,7 @@ POST http://localhost:8080
 ### Request
 ```json
 {
-  "read": "SELECT * FROM user WHERE name LIKE %ji%"
+  "sql": "SELECT * FROM user WHERE name LIKE %ji%"
 }
 ```
 ### Response (200)
@@ -216,7 +216,7 @@ POST http://localhost:8080
 ### Request
 ```json
 {
-  "write": "CREATE TABLE number (id INT NOT NULL AUTO_INCREMENT, num INT NOT NULL, PRIMARY KEY ( id ) )"
+  "sql": "CREATE TABLE number (id INT NOT NULL AUTO_INCREMENT, num INT NOT NULL, PRIMARY KEY ( id ) )"
 }
 ```
 ### Response (200)
@@ -226,3 +226,7 @@ POST http://localhost:8080
     "rows_affected": 0
 }
 ```
+
+SQLD will detect the query type is either read or write
+
+You can also add header "text/csv" (comma seperated), "text/tsv" (tab seperated) or "application/json" to get expected response format
