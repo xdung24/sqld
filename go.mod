@@ -1,13 +1,14 @@
 module sqld
 
-go 1.23
+go 1.24
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
-	github.com/go-sql-driver/mysql v1.8.1
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.24
+	github.com/mattn/go-sqlite3 v1.14.28
 )
 
 require (

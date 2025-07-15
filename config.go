@@ -90,11 +90,12 @@ func (c *Config) buildDSN() {
 	}
 
 	if c.Host == "" {
-		if c.Dbtype == "postgres" {
+		switch c.Dbtype {
+		case "postgres":
 			c.Host = "localhost:5432"
-		} else if c.Dbtype == "mysql" {
+		case "mysql":
 			c.Host = "localhost:3306"
-		} else {
+		default:
 			c.Host = "localhost"
 		}
 	}
@@ -187,19 +188,19 @@ func getEnvAsBool(name string, defaultValue bool) bool {
 
 func (config *Config) print() {
 	fmt.Println("Config:")
-	fmt.Println("  AllowRaw:", config.AllowRaw)
-	fmt.Println("  Dsn:", config.Dsn)
-	fmt.Println("  User:", config.User)
-	fmt.Println("  Pass:", config.Pass)
-	fmt.Println("  Host:", config.Host)
-	fmt.Println("  Dbtype:", config.Dbtype)
-	fmt.Println("  Dbname:", config.Dbname)
-	fmt.Println("  Port:", config.Port)
-	fmt.Println("  Url:", config.Url)
-	fmt.Println("  SqliteBackup:", config.SqliteBackup)
-	fmt.Println("  HealthCheckUrl:", config.HealthCheckUrl)
-	fmt.Println("  HealthCheckInteval:", config.HealthCheckInteval)
-	fmt.Println("  BackupInterval:", config.BackupInterval)
+	fmt.Println("AllowRaw:", config.AllowRaw)
+	fmt.Println("Dsn:", config.Dsn)
+	fmt.Println("User:", config.User)
+	fmt.Println("Pass:", config.Pass)
+	fmt.Println("Host:", config.Host)
+	fmt.Println("Dbtype:", config.Dbtype)
+	fmt.Println("Dbname:", config.Dbname)
+	fmt.Println("Port:", config.Port)
+	fmt.Println("Url:", config.Url)
+	fmt.Println("SqliteBackup:", config.SqliteBackup)
+	fmt.Println("HealthCheckUrl:", config.HealthCheckUrl)
+	fmt.Println("HealthCheckInteval:", config.HealthCheckInteval)
+	fmt.Println("BackupInterval:", config.BackupInterval)
 }
 
 // IsBaseUrl returns true if the url is the same as the base url or

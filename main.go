@@ -12,6 +12,7 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
 )
 
 var config Config
@@ -27,6 +28,14 @@ func main() {
 *** Do not use it in production without additional security (ssl, authentication, rate limit) ***`)
 
 	log.SetOutput(os.Stdout)
+
+	// Overload environment variables from .env file
+	if fileExists(".env") {
+		log.Println("Loading .env file...")
+		if err := godotenv.Overload(".env"); err != nil {
+			log.Println("No .env file found or error loading .env file")
+		}
+	}
 
 	config = HandleFlags()
 	if config.Debug {
