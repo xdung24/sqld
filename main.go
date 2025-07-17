@@ -33,8 +33,10 @@ func main() {
 	if fileExists(".env") {
 		log.Println("Loading .env file...")
 		if err := godotenv.Overload(".env"); err != nil {
-			log.Println("No .env file found or error loading .env file")
+			log.Println("Error loading .env file")
 		}
+	} else {
+		log.Println(".env file not found, using environment variables")
 	}
 
 	config = HandleFlags()
