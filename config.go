@@ -1,11 +1,13 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"github.com/subosito/gotenv"
 )
 
 const (
@@ -23,14 +25,12 @@ type Config struct {
 	Dbname             string // database name
 	Port               int    // server http port
 	Url                string // url prefix
-	SqliteBackup       string // sqlite backup file
 	HealthCheckUrl     string // health check url
 	HealthCheckInteval int    // health check interval
-	BackupInterval     int    // backup interval
 	Debug              bool   // debug mode
 }
 
-// Order of precedence: command line flag > environment variable > default value
+// Order of precedence: command line flag > .env file > environment variable > default value
 func parseConfig() Config {
 	// If has -v flag, print version and exit
 	if len(os.Args) > 1 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
@@ -38,38 +38,73 @@ func parseConfig() Config {
 		os.Exit(0)
 	}
 
-	var allowRaw = flag.Bool("raw", getEnvAsBool("ALLOW_RAW", false), "allow raw sql queries")
-	var dsn = flag.String("dsn", getEnv("DSN", ""), "database source name")
-	var user = flag.String("u", getEnv("DB_USER", "root"), "database username")
-	var pass = flag.String("p", getEnv("DB_PASS", ""), "database password")
-	var host = flag.String("h", getEnv("DB_HOST", ""), "database host")
-	var dbtype = flag.String("type", getEnv("DB_TYPE", "sqlite3"), "database type")
-	var dbname = flag.String("db", getEnv("DB_NAME", ""), "database name")
-	var port = flag.Int("port", getEnvAsInt("PORT", 8080), "http port")
-	var url = flag.String("url", getEnv("URL", "/"), "url prefix")
-	var sqliteBackup = flag.String("sqliteBackup", getEnv("SQLITE_BACKUP", ""), "sqlite backup file")
-	var healthCheckUrl = flag.String("healthCheckUrl", getEnv("HEALTH_CHECK_URL", ""), "health check url")
-	var healthCheckInterval = flag.Int("healthCheckInterval", getEnvAsInt("HEALTH_CHECK_INTERVAL", 1), "health check interval (minutes)")
-	var backupInterval = flag.Int("backupInterval", getEnvAsInt("BACKUP_INTERVAL", 5), "backup interval - only for sqlite memory (minutes)")
-	var debug = flag.Bool("debug", getEnvAsBool("DEBUG", false), "debug mode")
+	// Load .env file first
+	_ = gotenv.Load()
 
-	flag.Parse()
+	// Set up viper
+	v := viper.New()
+
+	// Set defaults
+	v.SetDefault("allowraw", false)
+	v.SetDefault("dsn", "")
+	v.SetDefault("user", "root")
+	v.SetDefault("pass", "")
+	v.SetDefault("host", "")
+	v.SetDefault("dbtype", "sqlite3")
+	v.SetDefault("dbname", "")
+	v.SetDefault("port", 8080)
+	v.SetDefault("url", "/")
+	v.SetDefault("healthcheckurl", "")
+	v.SetDefault("healthcheckinterval", 1)
+	v.SetDefault("debug", false)
+
+	// Bind environment variables
+	v.AutomaticEnv()
+	v.BindEnv("allowraw", "ALLOW_RAW")
+	v.BindEnv("dsn", "DSN")
+	v.BindEnv("user", "DB_USER")
+	v.BindEnv("pass", "DB_PASS")
+	v.BindEnv("host", "DB_HOST")
+	v.BindEnv("dbtype", "DB_TYPE")
+	v.BindEnv("dbname", "DB_NAME")
+	v.BindEnv("port", "PORT")
+	v.BindEnv("url", "URL")
+	v.BindEnv("healthcheckurl", "HEALTH_CHECK_URL")
+	v.BindEnv("healthcheckinterval", "HEALTH_CHECK_INTERVAL")
+	v.BindEnv("debug", "DEBUG")
+
+	// Define flags
+	pflag.Bool("raw", v.GetBool("allowraw"), "allow raw sql queries")
+	pflag.String("dsn", v.GetString("dsn"), "database source name")
+	pflag.StringP("user", "u", v.GetString("user"), "database username")
+	pflag.StringP("pass", "p", v.GetString("pass"), "database password")
+	pflag.StringP("host", "h", v.GetString("host"), "database host")
+	pflag.String("type", v.GetString("dbtype"), "database type")
+	pflag.String("db", v.GetString("dbname"), "database name")
+	pflag.Int("port", v.GetInt("port"), "http port")
+	pflag.String("url", v.GetString("url"), "url prefix")
+	pflag.String("healthCheckUrl", v.GetString("healthcheckurl"), "health check url")
+	pflag.Int("healthCheckInterval", v.GetInt("healthcheckinterval"), "health check interval (minutes)")
+	pflag.Bool("debug", v.GetBool("debug"), "debug mode")
+
+	pflag.Parse()
+
+	// Bind flags to viper
+	v.BindPFlags(pflag.CommandLine)
 
 	return Config{
-		AllowRaw:           *allowRaw,
-		Dsn:                *dsn,
-		User:               *user,
-		Pass:               *pass,
-		Host:               *host,
-		Dbtype:             *dbtype,
-		Dbname:             *dbname,
-		Port:               *port,
-		Url:                *url,
-		SqliteBackup:       *sqliteBackup,
-		HealthCheckUrl:     *healthCheckUrl,
-		HealthCheckInteval: *healthCheckInterval,
-		BackupInterval:     *backupInterval,
-		Debug:              *debug,
+		AllowRaw:           v.GetBool("raw"),
+		Dsn:                v.GetString("dsn"),
+		User:               v.GetString("user"),
+		Pass:               v.GetString("pass"),
+		Host:               v.GetString("host"),
+		Dbtype:             v.GetString("type"),
+		Dbname:             v.GetString("db"),
+		Port:               v.GetInt("port"),
+		Url:                v.GetString("url"),
+		HealthCheckUrl:     v.GetString("healthCheckUrl"),
+		HealthCheckInteval: v.GetInt("healthCheckInterval"),
+		Debug:              v.GetBool("debug"),
 	}
 }
 
@@ -131,10 +166,8 @@ Options:
   -url, --url          URL prefix (default: /)
   -dsn, --dsn          Database source name (default: file::memory:)
   -raw, --allowRaw     Allow raw SQL queries (default: false)
-  -sqliteBackup        SQLite backup file when using sqlite3 memcache (default: db.sqlite)
   -healthCheckUrl      Health check URL (default: http://localhost:8080/health)
   -healthCheckInterval Health check interval in minutes (default: 1)
-  -backupInterval      Backup interval in minutes (default: 5)
   -debug               Debug mode (default: false)
   -v                   Print version and exit
   
@@ -143,47 +176,17 @@ Example:
 `
 	fmt.Fprintln(os.Stderr, usageMessage)
 	fmt.Fprintln(os.Stderr, "Flags:")
-	flag.PrintDefaults()
+	pflag.PrintDefaults()
 	os.Exit(1)
 }
 
 // HandleFlags parses the command line flags and returns the Config
 func HandleFlags() Config {
-	flag.Usage = usage
+	pflag.Usage = usage
 	config := parseConfig()
 	config.fixUrl()
 	config.buildDSN()
 	return config
-}
-
-// CanBackup returns true if the database is sqlite3 and sqlite backup file is set
-func (c *Config) CanBackup() bool {
-	return c.Dbtype == "sqlite3" && c.SqliteBackup != ""
-}
-
-func getEnv(key string, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsInt(name string, defaultValue int) int {
-	if valueStr, exists := os.LookupEnv(name); exists {
-		if value, err := strconv.Atoi(valueStr); err == nil {
-			return value
-		}
-	}
-	return defaultValue
-}
-
-func getEnvAsBool(name string, defaultValue bool) bool {
-	if valueStr, exists := os.LookupEnv(name); exists {
-		if value, err := strconv.ParseBool(valueStr); err == nil {
-			return value
-		}
-	}
-	return defaultValue
 }
 
 func (config *Config) print() {
@@ -197,10 +200,8 @@ func (config *Config) print() {
 	fmt.Println("Dbname:", config.Dbname)
 	fmt.Println("Port:", config.Port)
 	fmt.Println("Url:", config.Url)
-	fmt.Println("SqliteBackup:", config.SqliteBackup)
 	fmt.Println("HealthCheckUrl:", config.HealthCheckUrl)
 	fmt.Println("HealthCheckInteval:", config.HealthCheckInteval)
-	fmt.Println("BackupInterval:", config.BackupInterval)
 }
 
 // IsBaseUrl returns true if the url is the same as the base url or

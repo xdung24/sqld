@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +16,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	sqlite3 "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // RawQuery wraps the request body of a raw sqld request
@@ -483,7 +482,6 @@ func raw(r *http.Request) (interface{}, *SqldError) {
 			return nil, BadRequest(err)
 		}
 		rAffect, _ := res.RowsAffected()
-		totalWrites++
 		return ExecResult{RowsAffected: rAffect}, nil
 	}
 
@@ -685,19 +683,10 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 			data, err = read(r)
 		case "POST":
 			data, err = create(r)
-			if err != nil {
-				totalWrites++
-			}
 		case "PUT":
 			data, err = update(r)
-			if err != nil {
-				totalWrites++
-			}
 		case "DELETE":
 			data, err = del(r)
-			if err != nil {
-				totalWrites++
-			}
 		default:
 			err = &SqldError{http.StatusMethodNotAllowed, errors.New("MethodNotAllowed")}
 		}
@@ -706,53 +695,4 @@ func HandleQuery(w http.ResponseWriter, r *http.Request) {
 	// Write the data to the response
 	status := writeResponse(w, r, data, err)
 	logRequest(r, status, start)
-}
-
-// backup copies the contents of the source database to the destination database using the SQLite backup API.
-func backup(destDb, srcDb *sqlx.DB) error {
-	destConn, err := destDb.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer destConn.Close()
-
-	srcConn, err := srcDb.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer srcConn.Close()
-
-	return destConn.Raw(func(destConn interface{}) error {
-		return srcConn.Raw(func(srcConn interface{}) error {
-			destSQLiteConn, ok := destConn.(*sqlite3.SQLiteConn)
-			if !ok {
-				return fmt.Errorf("can't convert destination connection to SQLiteConn")
-			}
-
-			srcSQLiteConn, ok := srcConn.(*sqlite3.SQLiteConn)
-			if !ok {
-				return fmt.Errorf("can't convert source connection to SQLiteConn")
-			}
-
-			b, err := destSQLiteConn.Backup("main", srcSQLiteConn, "main")
-			if err != nil {
-				return fmt.Errorf("error initializing SQLite backup: %w", err)
-			}
-
-			done, err := b.Step(-1)
-			if !done {
-				return fmt.Errorf("step of -1, but not done")
-			}
-			if err != nil {
-				return fmt.Errorf("error in stepping backup: %w", err)
-			}
-
-			err = b.Finish()
-			if err != nil {
-				return fmt.Errorf("error finishing backup: %w", err)
-			}
-
-			return err
-		})
-	})
 }

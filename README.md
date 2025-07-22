@@ -76,16 +76,14 @@ Sqlite3 memory
 
 sqld -type sqlite3 -dsn file::memory:  
 sqld -raw -type sqlite3 -dsn file::memory:  
-sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -backupInterval 5  
-sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url /  
-sqld -raw -type sqlite3 -dsn file::memory: -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5  
+sqld -raw -type sqlite3 -dsn file::memory: -url /  
+sqld -raw -type sqlite3 -dsn file::memory:-url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1
 
 Sqlite3 file
 sqld -type sqlite3 -dsn file:test.db  
 sqld -raw -type sqlite3 -dsn file:test.db  
-sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -backupInterval 5  
-sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url /  
-sqld -raw -type sqlite3 -dsn file:test.db -sqliteBackup backup.db -url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1 - backupInterval 5  
+sqld -raw -type sqlite3 -dsn file:test.db -url /  
+sqld -raw -type sqlite3 -dsn file:test.db-url / -healthCheckUrl http://localhost:8080/health -healthCheckInterval 1
 
 Postgres
 sqld -type postgres  
