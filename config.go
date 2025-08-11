@@ -225,9 +225,27 @@ func (c *Config) IsBaseUrl(url string) bool {
 
 // GetTableName returns the fully qualified table name for the database type
 // For PostgreSQL, it includes schema prefix if not using public schema
+// and properly quotes table names that contain uppercase letters
 func (c *Config) GetTableName(tableName string) string {
-	if c.Dbtype == "postgres" && c.Schema != "" && c.Schema != "public" {
-		return fmt.Sprintf("%s.%s", c.Schema, tableName)
+	if c.Dbtype == "postgres" {
+		// Check if table name contains uppercase letters - if so, it needs to be quoted
+		hasUppercase := false
+		for _, r := range tableName {
+			if r >= 'A' && r <= 'Z' {
+				hasUppercase = true
+				break
+			}
+		}
+
+		// Quote the table name if it has uppercase letters
+		if hasUppercase {
+			tableName = fmt.Sprintf("\"%s\"", tableName)
+		}
+
+		// Add schema prefix if not using public schema
+		if c.Schema != "" && c.Schema != "public" {
+			return fmt.Sprintf("%s.%s", c.Schema, tableName)
+		}
 	}
 	return tableName
 }

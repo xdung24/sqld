@@ -136,7 +136,11 @@ func buildSelectQuery(r *http.Request) (string, []interface{}, error) {
 		}
 	}
 
-	return query.ToSql()
+	sql, sqlArgs, err := query.ToSql()
+	if config.Debug {
+		log.Printf("Generated SELECT SQL: %s with args: %v", sql, sqlArgs)
+	}
+	return sql, sqlArgs, err
 }
 
 func buildUpdateQuery(r *http.Request, values map[string]interface{}) (string, []interface{}, error) {
