@@ -110,7 +110,8 @@ func parseRequest(r *http.Request) (table string, args map[string][]string, id s
 
 func buildSelectQuery(r *http.Request) (string, []interface{}, error) {
 	table, args, id := parseRequest(r)
-	query := sq.Select("*").From(table)
+	qualifiedTable := config.GetTableName(table)
+	query := sq.Select("*").From(qualifiedTable)
 
 	if id != "" {
 		query = query.Where(squirrel.Eq{"id": id})
@@ -140,7 +141,8 @@ func buildSelectQuery(r *http.Request) (string, []interface{}, error) {
 
 func buildUpdateQuery(r *http.Request, values map[string]interface{}) (string, []interface{}, error) {
 	table, args, id := parseRequest(r)
-	query := sq.Update("").Table(table)
+	qualifiedTable := config.GetTableName(table)
+	query := sq.Update("").Table(qualifiedTable)
 
 	for key, val := range values {
 		quotedKey := fmt.Sprintf("\"%s\"", key)
@@ -171,7 +173,8 @@ func buildUpdateQuery(r *http.Request, values map[string]interface{}) (string, [
 
 func buildDeleteQuery(r *http.Request) (string, []interface{}, error) {
 	table, args, id := parseRequest(r)
-	query := sq.Delete("").From(table)
+	qualifiedTable := config.GetTableName(table)
+	query := sq.Delete("").From(qualifiedTable)
 
 	if id != "" {
 		query = query.Where(squirrel.Eq{"id": id})
@@ -257,6 +260,7 @@ func read(r *http.Request) (interface{}, *SqldError) {
 // createSingle handles the POST method when only a single model
 // is provided in the request body.
 func createSingle(table string, item map[string]interface{}) (interface{}, error) {
+	qualifiedTable := config.GetTableName(table)
 	columns := make([]string, len(item))
 	values := make([]interface{}, len(item))
 
@@ -271,7 +275,7 @@ func createSingle(table string, item map[string]interface{}) (interface{}, error
 		i++
 	}
 
-	query := sq.Insert(table).
+	query := sq.Insert(qualifiedTable).
 		Columns(columns...).
 		Values(values...)
 

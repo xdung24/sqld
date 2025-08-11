@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	mysqlDSNTemplate    = "%s:%s@(%s)/%s?parseTime=true"
-	postgresDSNTemplate = "postgres://%s:%s@%s/%s?sslmode=disable"
+	mysqlDSNTemplate       = "%s:%s@(%s)/%s?parseTime=true"
+	postgresDSNTemplate    = "postgres://%s:%s@%s/%s?sslmode=disable"
+	postgresSchemaTemplate = "postgres://%s:%s@%s/%s?sslmode=disable&search_path=%s"
 )
 
 type Config struct {
@@ -23,6 +24,7 @@ type Config struct {
 	Host               string // database host
 	Dbtype             string // database type
 	Dbname             string // database name
+	Schema             string // database schema (PostgreSQL only)
 	Port               int    // server http port
 	Url                string // url prefix
 	HealthCheckUrl     string // health check url
@@ -52,6 +54,7 @@ func parseConfig() Config {
 	v.SetDefault("host", "")
 	v.SetDefault("dbtype", "sqlite3")
 	v.SetDefault("dbname", "")
+	v.SetDefault("schema", "public")
 	v.SetDefault("port", 8080)
 	v.SetDefault("url", "/")
 	v.SetDefault("healthcheckurl", "")
@@ -67,6 +70,7 @@ func parseConfig() Config {
 	v.BindEnv("host", "DB_HOST")
 	v.BindEnv("dbtype", "DB_TYPE")
 	v.BindEnv("dbname", "DB_NAME")
+	v.BindEnv("schema", "DB_SCHEMA")
 	v.BindEnv("port", "PORT")
 	v.BindEnv("url", "URL")
 	v.BindEnv("healthcheckurl", "HEALTH_CHECK_URL")
@@ -81,6 +85,7 @@ func parseConfig() Config {
 	pflag.StringP("host", "h", v.GetString("host"), "database host")
 	pflag.String("type", v.GetString("dbtype"), "database type")
 	pflag.String("db", v.GetString("dbname"), "database name")
+	pflag.String("schema", v.GetString("schema"), "database schema (PostgreSQL only)")
 	pflag.Int("port", v.GetInt("port"), "http port")
 	pflag.String("url", v.GetString("url"), "url prefix")
 	pflag.String("healthCheckUrl", v.GetString("healthcheckurl"), "health check url")
@@ -100,6 +105,7 @@ func parseConfig() Config {
 		Host:               v.GetString("host"),
 		Dbtype:             v.GetString("type"),
 		Dbname:             v.GetString("db"),
+		Schema:             v.GetString("schema"),
 		Port:               v.GetInt("port"),
 		Url:                v.GetString("url"),
 		HealthCheckUrl:     v.GetString("healthCheckUrl"),
@@ -143,7 +149,11 @@ func (c *Config) buildDSN() {
 	case "mysql":
 		c.Dsn = fmt.Sprintf(mysqlDSNTemplate, c.User, c.Pass, c.Host, c.Dbname)
 	case "postgres":
-		c.Dsn = fmt.Sprintf(postgresDSNTemplate, c.User, c.Pass, c.Host, c.Dbname)
+		if c.Schema != "" && c.Schema != "public" {
+			c.Dsn = fmt.Sprintf(postgresSchemaTemplate, c.User, c.Pass, c.Host, c.Dbname, c.Schema)
+		} else {
+			c.Dsn = fmt.Sprintf(postgresDSNTemplate, c.User, c.Pass, c.Host, c.Dbname)
+		}
 	case "sqlite3":
 		c.Dsn = "file::memory:"
 	default:
@@ -162,6 +172,7 @@ Options:
   -h, --host           Database host (default: localhost)
   -type, --dbtype      Database type (default: sqlite3, other supported: mysql, postgres)
   -db, --dbname        Database name
+  -schema, --schema    Database schema (PostgreSQL only, default: public)
   -port, --port        HTTP port (default: 8080)
   -url, --url          URL prefix (default: /)
   -dsn, --dsn          Database source name (default: file::memory:)
@@ -173,6 +184,7 @@ Options:
   
 Example:
   sqld -u root -p password -db mydatabase -h localhost:3306 -type mysql -port 8080 -url /api
+  sqld -u postgres -p password -db mydb -schema myschema -h localhost:5432 -type postgres -port 8080
 `
 	fmt.Fprintln(os.Stderr, usageMessage)
 	fmt.Fprintln(os.Stderr, "Flags:")
@@ -198,6 +210,7 @@ func (config *Config) print() {
 	fmt.Println("Host:", config.Host)
 	fmt.Println("Dbtype:", config.Dbtype)
 	fmt.Println("Dbname:", config.Dbname)
+	fmt.Println("Schema:", config.Schema)
 	fmt.Println("Port:", config.Port)
 	fmt.Println("Url:", config.Url)
 	fmt.Println("HealthCheckUrl:", config.HealthCheckUrl)
@@ -208,4 +221,13 @@ func (config *Config) print() {
 // the base url is a prefix of the url
 func (c *Config) IsBaseUrl(url string) bool {
 	return url == c.Url || url+"/" == c.Url
+}
+
+// GetTableName returns the fully qualified table name for the database type
+// For PostgreSQL, it includes schema prefix if not using public schema
+func (c *Config) GetTableName(tableName string) string {
+	if c.Dbtype == "postgres" && c.Schema != "" && c.Schema != "public" {
+		return fmt.Sprintf("%s.%s", c.Schema, tableName)
+	}
+	return tableName
 }
